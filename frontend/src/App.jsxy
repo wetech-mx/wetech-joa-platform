@@ -1,0 +1,127 @@
+import { useEffect, useState } from 'react'
+
+export default function App() {
+
+  const [leads, setLeads] = useState([])
+
+  const actualizarEstado = async (id, estado) => {
+  try {
+    console.log("Actualizando:", id, estado);
+
+    setLeads(
+      leads.map((lead) =>
+        lead.id === id
+          ? { ...lead, estado }
+          : lead
+      )
+    );
+
+  } catch (error) {
+    console.error(error);
+  }
+};
+  return (
+    <div className="min-h-screen bg-gray-100 flex">
+
+      <aside className="w-64 bg-black text-white p-6">
+
+        <h1 className="text-3xl font-bold text-orange-500 mb-10">
+          WE-TECH CRM
+        </h1>
+
+        <nav className="space-y-4">
+
+          <button className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition">
+            Dashboard
+          </button>
+
+          <button className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition">
+            Leads
+          </button>
+
+          <button className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition">
+            WhatsApp
+          </button>
+
+        </nav>
+
+      </aside>
+
+      <main className="flex-1 p-10">
+
+        <h2 className="text-4xl font-bold mb-10">
+          Leads CRM
+        </h2>
+
+        <div className="bg-white rounded-3xl p-8 shadow">
+
+          <table className="w-full text-sm">
+
+               <thead>
+  <tr>
+    <th>Nombre</th>
+    <th>Empresa</th>
+    <th>Teléfono</th>
+    <th>Correo</th>
+    <th>Prioridad</th>
+    <th>Necesidad</th>
+    <th>Fecha</th>
+    <th>Estado</th>
+  </tr>
+</thead>
+
+<tbody>
+  {leads.map((lead) => (
+    <tr key={lead.id}>
+    <td>{lead.nombre}</td>
+    <td>{lead.empresa}</td><td>
+  <a
+    href={`https://wa.me/52${lead.telefono}`}
+    target="_blank"
+    rel="noreferrer"
+  >
+    {lead.telefono}
+  </a>
+</td>
+
+<td>
+  <a href={`mailto:${lead.email}`}>
+    {lead.email}
+  </a>
+</td>
+
+<td>{lead.prioridad}</td>
+
+<td>{lead.necesidad}</td>
+
+<td>
+  {new Date(lead.created_at).toLocaleString("es-MX")}
+</td>
+
+<td>
+<select
+  value={lead.estado}
+  onChange={(e) =>
+    actualizarEstado(lead.id, e.target.value)
+  }
+>
+  <option>Nuevo</option>
+  <option>Contactado</option>
+  <option>Propuesta enviada</option>
+  <option>Ganado</option>
+  <option>Perdido</option>
+</select>
+</td>  
+    </tr>
+  ))}
+</tbody>
+
+          </table>
+
+        </div>
+
+      </main>
+
+    </div>
+  )
+}
