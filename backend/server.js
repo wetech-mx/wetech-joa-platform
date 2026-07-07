@@ -1,9 +1,36 @@
+require('dotenv').config()
+
 const multer = require('multer')
 const XLSX = require('xlsx')
 const fs = require('fs')
 
 const jwt = require('jsonwebtoken')
-const JWT_SECRET = 'WETECH_CRM_2026_SUPER_SECRET'
+const JWT_SECRET =
+process.env.JWT_SECRET
+
+/************************************************
+ * CONSTANTES DEL SISTEMA
+ ************************************************/
+
+const ROLES = Object.freeze({
+  SUPER_ADMIN: 'super_admin',
+  ADMIN: 'Administrador',
+  EJECUTIVO: 'Ejecutivo'
+})
+
+const ESTADOS_LEAD = Object.freeze({
+  NUEVO: 'Nuevo',
+  CONTACTADO: 'Contactado',
+  SEGUIMIENTO: 'Seguimiento',
+  GANADO: 'Ganado',
+  PERDIDO: 'Perdido'
+})
+
+const PRIORIDADES = Object.freeze({
+  BAJA: 'Baja',
+  MEDIA: 'Media',
+  ALTA: 'Alta'
+})
 
 const express = require('express')
 const cors = require('cors')
@@ -20,13 +47,52 @@ app.use(cors())
 app.use(express.json())
 
 const pool = new Pool({
-  user: 'wetech',
-  host: '127.0.0.1',
-  database: 'wetech_db',
-  password: 'Wetech2026!',
-  port: 5432,
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_NAME,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
 })
 
+function verificaToken(
+  req,
+  res,
+  next
+) {
+
+  const authHeader =
+    req.headers.authorization
+
+  if (!authHeader) {
+    return res.status(401).json({
+      error: 'Token requerido'
+    })
+  }
+
+  const token =
+    authHeader.split(' ')[1]
+
+  try {
+
+    const decoded =
+      jwt.verify(
+        token,
+        JWT_SECRET
+      )
+
+    req.usuario = decoded
+
+    next()
+
+  } catch(error) {
+
+    return res.status(401).json({
+      error: 'Token inválido'
+    })
+
+  }
+
+}
 
 async function registrarHistorial(
   lead_id,
@@ -80,19 +146,56 @@ app.get('/', (req, res) => {
   })
 })
 
-app.get('/api/leads', async (req, res) => {
+app.get(
+  '/api/leads',
+  verificaToken,
+  async (req, res) => {
 
   try {
 
-    const result = await pool.query(`
-      SELECT
-  leads.*,
-  usuarios.nombre AS usuario_nombre
-FROM leads
-LEFT JOIN usuarios
-  ON usuarios.id = leads.usuario_id
-ORDER BY leads.id DESC
-    `)
+    let query = `
+  SELECT
+    leads.*,
+    usuarios.nombre AS usuario_nombre
+  FROM leads
+  LEFT JOIN usuarios
+    ON usuarios.id = leads.usuario_id
+`
+
+let params = []
+
+if (
+  req.usuario.rol !== 'super_admin'
+) {
+
+  query += `
+    WHERE
+      leads.empresa_id = $1
+      AND leads.activo = true
+  `
+
+  params.push(
+    req.usuario.empresa_id
+  )
+
+}
+else {
+
+  query += `
+    WHERE leads.activo = true
+  `
+
+}
+
+query += `
+  ORDER BY leads.id DESC
+`
+
+const result =
+  await pool.query(
+    query,
+    params
+  )
 
     res.json(result.rows)
 
@@ -242,9 +345,10 @@ app.post('/api/login', async (req, res) => {
     const token = jwt.sign(
       {
         id: usuario.id,
-        rol: usuario.rol
+        rol: usuario.rol,
+       empresa_id: usuario.empresa_id,
       },
-      'WE-TECH-CRM-2026',
+      JWT_SECRET,
       {
         expiresIn: '12h'
       }
@@ -255,7 +359,8 @@ app.post('/api/login', async (req, res) => {
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
-        rol: usuario.rol
+        rol: usuario.rol,
+        empresa_id: usuario.empresa_id,
       }
     })
 

@@ -10,6 +10,9 @@ import Login from './Login'
 
 export default function App() {
 
+const token =
+  localStorage.getItem('token')
+
 const [leadSeleccionado, setLeadSeleccionado] = useState(null)
 
 const [usuario, setUsuario] = useState(
@@ -221,25 +224,33 @@ const actualizarNotas = async (id, notas) => {
 
 useEffect(() => {
 
-    fetch('/crm-api/leads')
-      .then(res => res.json())
-      .then(data => {
-       
-        console.log (data)
+  fetch('/crm-api/leads', {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
+    .then(res => res.json())
+    .then(data => {
 
-        setLeads(data)
-    fetch('/crm-api/alertas')
-  .then(res => res.json())
-  .then(data => setAlertas(data))
+  if(!Array.isArray(data)){
+    console.error(data)
+    return
+  }
 
-   fetch('/crm-api/usuarios-activos')
-  .then(res => res.json())
-  .then(data => setUsuarios(data))
+  setLeads(data)
 
+})
+  
 
-      })
+  fetch('/crm-api/alertas')
+    .then(res => res.json())
+    .then(data => setAlertas(data))
 
-  }, [])
+  fetch('/crm-api/usuarios-activos')
+    .then(res => res.json())
+    .then(data => setUsuarios(data))
+
+}, [])
 
     const leadsFiltrados = leads
   .filter((lead) => {
