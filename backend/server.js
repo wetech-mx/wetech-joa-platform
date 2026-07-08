@@ -1,40 +1,31 @@
 require('dotenv').config()
 
+const {
+  verificaToken,
+  requiereEmpresa,
+  requiereAdmin,
+  requiereSuperAdmin
+} = require('./middleware/auth')
+
+const authRoutes = require('./routes/auth.routes')
+
 const multer = require('multer')
 const XLSX = require('xlsx')
 const fs = require('fs')
-
 const jwt = require('jsonwebtoken')
-const JWT_SECRET =
-process.env.JWT_SECRET
 
-/************************************************
- * CONSTANTES DEL SISTEMA
- ************************************************/
+const { JWT_SECRET } = require('./config/auth')
+const pool = require('./config/database')
 
-const ROLES = Object.freeze({
-  SUPER_ADMIN: 'super_admin',
-  ADMIN: 'Administrador',
-  EJECUTIVO: 'Ejecutivo'
-})
+const {
+  ROLES,
+  ESTADOS_LEAD,
+  PRIORIDADES
+} = require('./config/constants')
 
-const ESTADOS_LEAD = Object.freeze({
-  NUEVO: 'Nuevo',
-  CONTACTADO: 'Contactado',
-  SEGUIMIENTO: 'Seguimiento',
-  GANADO: 'Ganado',
-  PERDIDO: 'Perdido'
-})
-
-const PRIORIDADES = Object.freeze({
-  BAJA: 'Baja',
-  MEDIA: 'Media',
-  ALTA: 'Alta'
-})
 
 const express = require('express')
 const cors = require('cors')
-const { Pool } = require('pg')
 const bcrypt = require('bcrypt')
 
 const app = express()
@@ -46,53 +37,8 @@ const upload = multer({
 app.use(cors())
 app.use(express.json())
 
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-})
 
-function verificaToken(
-  req,
-  res,
-  next
-) {
 
-  const authHeader =
-    req.headers.authorization
-
-  if (!authHeader) {
-    return res.status(401).json({
-      error: 'Token requerido'
-    })
-  }
-
-  const token =
-    authHeader.split(' ')[1]
-
-  try {
-
-    const decoded =
-      jwt.verify(
-        token,
-        JWT_SECRET
-      )
-
-    req.usuario = decoded
-
-    next()
-
-  } catch(error) {
-
-    return res.status(401).json({
-      error: 'Token inválido'
-    })
-
-  }
-
-}
 
 async function registrarHistorial(
   lead_id,
@@ -145,6 +91,11 @@ app.get('/', (req, res) => {
     message: 'WE-TECH CRM API funcionando 🚀'
   })
 })
+
+app.use(
+  '/api',
+  authRoutes
+)
 
 app.get(
   '/api/leads',
@@ -306,70 +257,6 @@ app.get('/api/leads/:id/historial', async (req, res) => {
 
     res.status(500).json({
       error: 'Error obteniendo historial'
-    })
-
-  }
-
-})
-
-app.post('/api/login', async (req, res) => {
-
-  const { email, password } = req.body
-
-  try {
-
-    const result = await pool.query(
-      'SELECT * FROM usuarios WHERE email = $1',
-      [email]
-    )
-
-    if(result.rows.length === 0){
-      return res.status(401).json({
-        error: 'Usuario no encontrado'
-      })
-    }
-
-    const usuario = result.rows[0]
-
-    const valido = await bcrypt.compare(
-      password,
-      usuario.password_hash
-    )
-
-    if(!valido){
-      return res.status(401).json({
-        error: 'Contraseña incorrecta'
-      })
-    }
-
-    const token = jwt.sign(
-      {
-        id: usuario.id,
-        rol: usuario.rol,
-       empresa_id: usuario.empresa_id,
-      },
-      JWT_SECRET,
-      {
-        expiresIn: '12h'
-      }
-    )
-
-    res.json({
-      token,
-      usuario: {
-        id: usuario.id,
-        nombre: usuario.nombre,
-        rol: usuario.rol,
-        empresa_id: usuario.empresa_id,
-      }
-    })
-
-  } catch(error){
-
-    console.error(error)
-
-    res.status(500).json({
-      error: 'Error login'
     })
 
   }
