@@ -1,0 +1,41 @@
+[Unit]
+Description=Generar cartera diaria de Banco Azteca
+Documentation=https://crm.cobranzalegalrosasyasociados.com
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/opt/crm/backend/.env
+ConditionPathIsDirectory=/srv/banco-azteca-transfer/outbox
+
+[Service]
+Type=oneshot
+User=root
+Group=bancoexport
+WorkingDirectory=/opt/crm/backend
+Environment=NODE_ENV=production
+EnvironmentFile=-/etc/default/banco-azteca-cartera
+ExecStart=/usr/bin/node /opt/crm/backend/scripts/export-banco-azteca-daily.js
+UMask=0027
+TimeoutStartSec=45min
+SyslogIdentifier=banco-azteca-cartera
+
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/crm/backend
+ReadWritePaths=/srv/banco-azteca-transfer/outbox
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

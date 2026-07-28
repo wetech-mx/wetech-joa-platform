@@ -1,0 +1,15 @@
+[Unit]
+Description=Programar cartera de Banco Azteca
+Documentation=https://crm.cobranzalegalrosasyasociados.com
+
+[Timer]
+Unit=banco-azteca-cartera.service
+OnCalendar=Mon..Fri *-*-* 07:15:00 America/Mexico_City
+OnCalendar=Mon..Fri *-*-* 08:00:00 America/Mexico_City
+OnCalendar=Mon..Fri *-*-* 08:45:00 America/Mexico_City
+AccuracySec=1min
+RandomizedDelaySec=0
+Persistent=true
+
+[Install]
+WantedBy=timers.target
