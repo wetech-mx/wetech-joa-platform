@@ -19,6 +19,13 @@ function validateDate(value) {
   return value
 }
 
+function formatDateForBank(value) {
+  const safeDate = validateDate(value)
+  const [year, month, day] = safeDate.split('-')
+
+  return `${day}-${month}-${year}`
+}
+
 async function exportPortfolio(
   date,
   {
@@ -28,6 +35,7 @@ async function exportPortfolio(
   } = {}
 ) {
   const safeDate = validateDate(date)
+  const bankDate = formatDateForBank(safeDate)
   const config = getBancoAztecaConfig(env)
   const client = createBancoAztecaClient(config, { fetchImpl })
 
@@ -36,7 +44,7 @@ async function exportPortfolio(
   const campaigns = await client.getCampaigns(
     token,
     keys.idAcceso,
-    safeDate
+    bankDate
   )
 
   const rawClients = []
@@ -70,6 +78,7 @@ async function exportPortfolio(
 }
 
 module.exports = {
+  formatDateForBank,
   validateDate,
   exportPortfolio
 }
