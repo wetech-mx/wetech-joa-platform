@@ -322,13 +322,13 @@ if (!usuario) {
   return (
     <div className="min-h-screen bg-gray-100 flex">
 
-      <aside className="w-64 bg-black text-white p-6">
+      <aside className="w-64 min-h-screen shrink-0 bg-black text-white p-6 flex flex-col">
 
         <h1 className="text-3xl font-bold text-orange-500 mb-10">
-          WE-TECH CRM
+          Rosas y Asociados CRM
         </h1>
 
-        <nav className="space-y-4">
+        <nav className="space-y-4 flex-1">
           
             {usuario?.rol !== 'Ejecutivo' && (
   <button
@@ -366,6 +366,18 @@ if (!usuario) {
           </button>
 
         </nav>
+
+          <div className="mt-10 pt-4 border-t border-gray-700 text-xs text-gray-400">
+            Tecnología desarrollada por
+            <a
+              href="https://we-tech.mx"
+              target="_blank"
+              rel="noreferrer"
+              className="block mt-1 text-orange-400 hover:underline"
+            >
+              We-Tech.mx
+            </a>
+          </div>
 
       </aside>
 
@@ -438,7 +450,7 @@ if (!usuario) {
   <div>
 
     <h1 className="text-5xl font-bold">
-      CRM
+      Rosas y Asociados CRM
     </h1>
 
     <p className="text-gray-500">

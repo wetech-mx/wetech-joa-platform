@@ -54,7 +54,7 @@ export default function Login({ onLogin }) {
       >
 
         <h1 className="text-2xl font-bold mb-6 text-center">
-          WE-TECH CRM
+          Rosas y Asociados CRM
         </h1>
 
         <input
@@ -85,6 +85,18 @@ export default function Login({ onLogin }) {
         >
           Ingresar
         </button>
+
+          <p className="mt-6 text-center text-xs text-gray-500">
+            Tecnología desarrollada por{' '}
+            <a
+              href="https://we-tech.mx"
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold hover:underline"
+            >
+              We-Tech.mx
+            </a>
+          </p>
 
       </form>
 

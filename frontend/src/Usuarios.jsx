@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiFetch } from './api'
 
 export default function Usuarios() {
 
@@ -15,18 +16,42 @@ const [nuevoUsuario, setNuevoUsuario] = useState({
   rol: 'Ejecutivo'
 })
   const [usuarios, setUsuarios] = useState([])
+  const [errorCarga, setErrorCarga] = useState('')
 
-const obtenerUsuarios = async () => {
+  const obtenerUsuarios = async () => {
 
-  const res = await fetch('/crm-api/usuarios')
+    try {
 
-  const data = await res.json()
+      setErrorCarga('')
 
-  setUsuarios(data)
+      const res = await apiFetch('/crm-api/usuarios')
+      const data = await res.json()
 
-}
+      if (!res.ok) {
+        throw new Error(
+          data.error || 'No fue posible consultar los usuarios'
+        )
+      }
 
-   useEffect(() => {
+      if (!Array.isArray(data)) {
+        throw new Error(
+          'La respuesta de usuarios no tiene el formato esperado'
+        )
+      }
+
+      setUsuarios(data)
+
+    } catch (error) {
+
+      console.error(error)
+      setUsuarios([])
+      setErrorCarga(error.message)
+
+    }
+
+  }
+
+  useEffect(() => {
 
   // La carga inicial actualiza el estado con la respuesta de la API.
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -40,7 +65,7 @@ const guardarUsuario = async () => {
 
     if(modoEdicion){
 
-      const response = await fetch(
+      const response = await apiFetch(
         `/crm-api/usuarios/${usuarioEditando.id}`,
         {
           method:'PUT',
@@ -73,7 +98,7 @@ const guardarUsuario = async () => {
       return
     }
 
-    const response = await fetch(
+    const response = await apiFetch(
       '/crm-api/usuarios',
       {
         method:'POST',
@@ -144,7 +169,7 @@ if(id === 1){
 
   try {
 
-    const response = await fetch(
+    const response = await apiFetch(
       `/crm-api/usuarios/${id}`,
       {
         method:'DELETE'
@@ -201,6 +226,13 @@ if(id === 1){
 </button>
 
       </div>
+
+      {errorCarga && (
+          <div className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-red-700">
+            {errorCarga}
+          </div>
+        )}
+
 
       <table className="w-full">
 

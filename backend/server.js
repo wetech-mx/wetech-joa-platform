@@ -28,6 +28,9 @@ const {
 
 const express = require('express')
 const cors = require('cors')
+const {
+  crearOpcionesCors
+} = require('./config/security')
 const bcrypt = require('bcrypt')
 
 const app = express()
@@ -36,7 +39,7 @@ const upload = multer({
   dest: 'uploads/'
 })
 
-app.use(cors())
+app.use(cors(crearOpcionesCors(process.env.CORS_ORIGINS)))
 app.use(express.json())
 
 
