@@ -8,6 +8,7 @@ const {
 } = require('./middleware/auth')
 
 const authRoutes = require('./routes/auth.routes')
+const usuariosRoutes = require('./routes/usuarios.routes')
 
 const multer = require('multer')
 const XLSX = require('xlsx')
@@ -96,6 +97,8 @@ app.use(
   '/api',
   authRoutes
 )
+
+app.use('/api', usuariosRoutes)
 
 app.get(
   '/api/leads',
@@ -483,36 +486,6 @@ app.get('/api/alertas', async (req, res) => {
 
     res.status(500).json({
       error: 'Error obteniendo alertas'
-    })
-
-  }
-
-})
-
-app.get('/api/usuarios', async (req, res) => {
-
-  try {
-
-    const result = await pool.query(`
-      SELECT
-        id,
-        nombre,
-        email,
-        rol,
-        activo,
-        created_at
-      FROM usuarios
-      ORDER BY id ASC
-    `)
-
-    res.json(result.rows)
-
-  } catch(error){
-
-    console.error(error)
-
-    res.status(500).json({
-      error: 'Error obteniendo usuarios'
     })
 
   }

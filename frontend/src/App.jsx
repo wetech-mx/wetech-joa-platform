@@ -224,6 +224,11 @@ const actualizarNotas = async (id, notas) => {
 
 useEffect(() => {
 
+  if (!usuario) return
+
+  const token = localStorage.getItem('token')
+
+
   fetch('/crm-api/leads', {
     headers: {
       Authorization: `Bearer ${token}`
@@ -250,7 +255,7 @@ useEffect(() => {
     .then(res => res.json())
     .then(data => setUsuarios(data))
 
-}, [])
+}, [usuario])
 
     const leadsFiltrados = leads
   .filter((lead) => {
