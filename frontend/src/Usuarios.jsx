@@ -28,6 +28,8 @@ const obtenerUsuarios = async () => {
 
    useEffect(() => {
 
+  // La carga inicial actualiza el estado con la respuesta de la API.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   obtenerUsuarios()
 
 }, [])

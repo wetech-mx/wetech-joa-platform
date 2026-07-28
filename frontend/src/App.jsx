@@ -7,11 +7,9 @@ import Usuarios from './Usuarios'
 import LeadsKanban from './LeadsKanban'
 
 import Login from './Login'
+import BancoAzteca from './BancoAzteca'
 
 export default function App() {
-
-const token =
-  localStorage.getItem('token')
 
 const [leadSeleccionado, setLeadSeleccionado] = useState(null)
 
@@ -354,6 +352,15 @@ if (!usuario) {
            Leads
           </button>
 
+          {usuario?.rol !== 'Ejecutivo' && (
+            <button
+              onClick={() => setPantalla('banco-azteca')}
+              className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition"
+            >
+              Banco Azteca
+            </button>
+          )}
+
           <button className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition">
             WhatsApp
           </button>
@@ -366,6 +373,10 @@ if (!usuario) {
 
 {pantalla === 'usuarios' && (
   <Usuarios />
+)}
+
+{pantalla === 'banco-azteca' && (
+  <BancoAzteca />
 )}
 
 {pantalla === 'leads' && (
@@ -487,13 +498,13 @@ if (!usuario) {
 
 </div>
 
-{alertas.vencidos.length > 0 && (
+{alertasVisibles.vencidos.length > 0 && (
   <div className="bg-red-100 border-l-4 border-red-500 p-4 mb-6 rounded">
     <h3 className="font-bold text-red-700">
       ⚠️ Seguimientos vencidos
     </h3>
 
-    {alertas.vencidos.map(item => (
+    {alertasVisibles.vencidos.map(item => (
       <div key={item.id}>
         {item.nombre} - {
   new Date(item.proximo_contacto).toLocaleDateString('es-MX', {
@@ -751,4 +762,3 @@ if (!usuario) {
     </div>
   )
 }
-

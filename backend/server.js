@@ -9,6 +9,7 @@ const {
 
 const authRoutes = require('./routes/auth.routes')
 const usuariosRoutes = require('./routes/usuarios.routes')
+const bancoAztecaRoutes = require('./routes/banco-azteca.routes')
 
 const multer = require('multer')
 const XLSX = require('xlsx')
@@ -99,6 +100,7 @@ app.use(
 )
 
 app.use('/api', usuariosRoutes)
+app.use('/api/banco-azteca', bancoAztecaRoutes)
 
 app.get(
   '/api/leads',
