@@ -130,6 +130,323 @@ function rowToObject(row) {
   )
 }
 
+function isBlank(value) {
+  return (
+    value === null
+    || value === undefined
+    || String(value).trim() === ''
+  )
+}
+
+function normalizeText(value) {
+  if (isBlank(value)) {
+    return null
+  }
+
+  return String(value).trim()
+}
+
+function normalizeRequiredIdentifier(
+  value,
+  field,
+  rowNumber
+) {
+  const normalized = normalizeText(value)
+
+  if (normalized === null) {
+    throw new CarteraImportError(
+      'BAZ_IMPORT_REQUIRED_ID_MISSING',
+      `La fila ${rowNumber} no contiene ${field}`,
+      {
+        field,
+        rowNumber
+      }
+    )
+  }
+
+  return normalized
+}
+
+function normalizeInteger(
+  value,
+  field,
+  rowNumber,
+  {
+    min = Number.MIN_SAFE_INTEGER,
+    max = Number.MAX_SAFE_INTEGER
+  } = {}
+) {
+  if (isBlank(value)) {
+    return null
+  }
+
+  const normalized = (
+    typeof value === 'number'
+      ? value
+      : Number(String(value).trim())
+  )
+
+  if (
+    !Number.isSafeInteger(normalized)
+    || normalized < min
+    || normalized > max
+  ) {
+    throw new CarteraImportError(
+      'BAZ_IMPORT_INTEGER_INVALID',
+      `La fila ${rowNumber} contiene un entero inválido en ${field}`,
+      {
+        field,
+        rowNumber
+      }
+    )
+  }
+
+  return normalized
+}
+
+function normalizeDecimal(value, field, rowNumber) {
+  if (isBlank(value)) {
+    return null
+  }
+
+  const normalized = (
+    typeof value === 'number'
+      ? value
+      : Number(
+        String(value)
+          .trim()
+          .replace(/[$,\s]/g, '')
+      )
+  )
+
+  if (!Number.isFinite(normalized)) {
+    throw new CarteraImportError(
+      'BAZ_IMPORT_DECIMAL_INVALID',
+      `La fila ${rowNumber} contiene un importe inválido en ${field}`,
+      {
+        field,
+        rowNumber
+      }
+    )
+  }
+
+  return normalized
+}
+
+function excelSerialToIsoDate(value) {
+  const parsed = XLSX.SSF.parse_date_code(value)
+
+  if (!parsed) {
+    return null
+  }
+
+  const year = String(parsed.y).padStart(4, '0')
+  const month = String(parsed.m).padStart(2, '0')
+  const day = String(parsed.d).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function normalizeDate(value, field, rowNumber) {
+  if (isBlank(value)) {
+    return null
+  }
+
+  let normalized
+
+  if (value instanceof Date) {
+    normalized = value.toISOString().slice(0, 10)
+  } else if (typeof value === 'number') {
+    normalized = excelSerialToIsoDate(value)
+  } else {
+    const text = String(value).trim()
+    const latinDate = text.match(
+      /^(\d{2})\/(\d{2})\/(\d{4})$/
+    )
+
+    normalized = latinDate
+      ? `${latinDate[3]}-${latinDate[2]}-${latinDate[1]}`
+      : text
+  }
+
+  if (!normalized || !isValidIsoDate(normalized)) {
+    throw new CarteraImportError(
+      'BAZ_IMPORT_DATE_VALUE_INVALID',
+      `La fila ${rowNumber} contiene una fecha inválida en ${field}`,
+      {
+        field,
+        rowNumber
+      }
+    )
+  }
+
+  return normalized
+}
+
+function transformPortfolioRow(row, rowNumber = 2) {
+  const idCampania = normalizeRequiredIdentifier(
+    row.IdCampaña,
+    'IdCampaña',
+    rowNumber
+  )
+  const idCliente = normalizeRequiredIdentifier(
+    row.IdCliente,
+    'IdCliente',
+    rowNumber
+  )
+
+  return {
+    identity: {
+      idCampania,
+      idCliente,
+      key: `${idCampania}\u0000${idCliente}`
+    },
+    snapshot: {
+      nombre: normalizeText(row.Nombre),
+      idGenero: normalizeText(row.IdGenero),
+      edad: normalizeInteger(
+        row.Edad,
+        'Edad',
+        rowNumber,
+        {
+          min: 0,
+          max: 130
+        }
+      ),
+      idNivelRiesgo: normalizeText(
+        row.IdNivelRiesgo
+      ),
+      medioContactoSugerido: normalizeText(
+        row.MedioContactoSugerido
+      ),
+      telefono1: normalizeText(row['Teléfono 1']),
+      tipoTelefono1: normalizeText(
+        row['Tipo Teléfono 1']
+      ),
+      telefono2: normalizeText(row['Teléfono 2']),
+      tipoTelefono2: normalizeText(
+        row['Tipo Teléfono 2']
+      ),
+      telefono3: normalizeText(row['Teléfono 3']),
+      tipoTelefono3: normalizeText(
+        row['Tipo Teléfono 3']
+      ),
+      telefono4: normalizeText(row['Teléfono 4']),
+      tipoTelefono4: normalizeText(
+        row['Tipo Teléfono 4']
+      ),
+      correo1: normalizeText(row['Correo 1']),
+      correo2: normalizeText(row['Correo 2']),
+      idPais: normalizeText(row.IdPais),
+      idCanal: normalizeText(row.IdCanal),
+      idSucursal: normalizeText(row.IdSucursal),
+      folio: normalizeText(row.Folio),
+      semanasAtraso: normalizeInteger(
+        row.SemanasAtraso,
+        'SemanasAtraso',
+        rowNumber,
+        {
+          min: 0
+        }
+      ),
+      diasAtraso: normalizeInteger(
+        row.DiasAtraso,
+        'DiasAtraso',
+        rowNumber,
+        {
+          min: 0
+        }
+      ),
+      diaPago: normalizeText(row.DiaPago),
+      saldo: normalizeDecimal(
+        row.Saldo,
+        'Saldo',
+        rowNumber
+      ),
+      pagoRequerido: normalizeDecimal(
+        row.PagoRequerido,
+        'PagoRequerido',
+        rowNumber
+      ),
+      pagoMinimo: normalizeDecimal(
+        row.PagoMinimo,
+        'PagoMinimo',
+        rowNumber
+      ),
+      pagoNoGeneraIntereses: normalizeDecimal(
+        row.PagoNoGeneraIntereses,
+        'PagoNoGeneraIntereses',
+        rowNumber
+      ),
+      abonoPuntual: normalizeDecimal(
+        row.AbonoPuntual,
+        'AbonoPuntual',
+        rowNumber
+      ),
+      abonoSemanal: normalizeDecimal(
+        row.AbonoSemanal,
+        'AbonoSemanal',
+        rowNumber
+      ),
+      fechaProximaPago: normalizeDate(
+        row.FechaProximaPago,
+        'FechaProximaPago',
+        rowNumber
+      ),
+      fechaVencimiento: normalizeDate(
+        row.FechaVencimiento,
+        'FechaVencimiento',
+        rowNumber
+      ),
+      producto: normalizeText(row.Producto),
+      codigoPostal: normalizeText(
+        row.CodigoPostal
+      )
+    },
+    rawData: {
+      ...row
+    },
+    rowNumber
+  }
+}
+
+function transformPortfolioRows(rows) {
+  const transformed = []
+  const identities = new Map()
+
+  for (let index = 0; index < rows.length; index++) {
+    const rowNumber = index + 2
+    const record = transformPortfolioRow(
+      rows[index],
+      rowNumber
+    )
+    const previousRow = identities.get(
+      record.identity.key
+    )
+
+    if (previousRow) {
+      throw new CarteraImportError(
+        'BAZ_IMPORT_DUPLICATE_IDENTITY',
+        `Las filas ${previousRow} y ${rowNumber} repiten IdCampaña + IdCliente`,
+        {
+          firstRow: previousRow,
+          duplicateRow: rowNumber,
+          idCampania: record.identity.idCampania,
+          idCliente: record.identity.idCliente
+        }
+      )
+    }
+
+    identities.set(
+      record.identity.key,
+      rowNumber
+    )
+    transformed.push(record)
+  }
+
+  return transformed
+}
+
 async function readPortfolioWorkbook(filePath) {
   const date = parsePortfolioDate(filePath)
   const buffer = await fs.promises.readFile(filePath)
@@ -189,12 +506,15 @@ async function readPortfolioWorkbook(filePath) {
     )
   }
 
+  const rawRows = dataRows.map(rowToObject)
+
   return {
     date,
     fileName: path.basename(filePath),
     sha256: checksumFor(buffer),
     headers: [...HEADERS],
-    rows: dataRows.map(rowToObject),
+    rows: rawRows,
+    records: transformPortfolioRows(rawRows),
     totalRows: dataRows.length
   }
 }
@@ -203,7 +523,12 @@ module.exports = {
   CarteraImportError,
   checksumFor,
   isValidIsoDate,
+  normalizeDate,
+  normalizeDecimal,
+  normalizeInteger,
   parsePortfolioDate,
   readPortfolioWorkbook,
+  transformPortfolioRow,
+  transformPortfolioRows,
   validateHeaders
 }
