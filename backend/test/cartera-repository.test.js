@@ -28,6 +28,23 @@ function portfolio(records = [
   }
 }
 
+function assignmentStub(status = 'assigned') {
+  const calls = []
+  const fn = async input => {
+    calls.push(input)
+
+    return {
+      status,
+      asignacionId: 900 + calls.length,
+      usuarioId: 20
+    }
+  }
+
+  fn.calls = calls
+
+  return fn
+}
+
 function fakePool({
   existingByHash = null,
   completedByDate = null,
@@ -234,12 +251,14 @@ test('distribuye 32 campos de snapshot más dos identificadores', () => {
 
 test('importa una cuenta nueva en una transacción', async () => {
   const context = fakePool()
+  const assignFn = assignmentStub()
 
   const result = await persistPortfolio({
     pool: context.pool,
     empresaId: 7,
     portfolio: portfolio(),
-    creadoPor: 3
+    creadoPor: 3,
+    assignFn
   })
 
   assert.deepEqual(result, {
@@ -248,7 +267,9 @@ test('importa una cuenta nueva en una transacción', async () => {
     campaigns: 1,
     totalRows: 1,
     newRecords: 1,
-    updatedRecords: 0
+    updatedRecords: 0,
+    assignedRecords: 1,
+    keptAssignments: 0
   })
   assert.equal(context.client.released, true)
   assert.equal(
@@ -270,11 +291,14 @@ test('actualiza una cuenta existente sin duplicarla', async () => {
   const result = await persistPortfolio({
     pool: context.pool,
     empresaId: 7,
-    portfolio: portfolio()
+    portfolio: portfolio(),
+    assignFn: assignmentStub('kept')
   })
 
   assert.equal(result.newRecords, 0)
   assert.equal(result.updatedRecords, 1)
+  assert.equal(result.assignedRecords, 0)
+  assert.equal(result.keptAssignments, 1)
   assert.equal(
     context.calls.some(call => (
       call.sql.startsWith(
@@ -296,7 +320,8 @@ test('no repite una importación completada con el mismo SHA', async () => {
   const result = await persistPortfolio({
     pool: context.pool,
     empresaId: 7,
-    portfolio: portfolio()
+    portfolio: portfolio(),
+    assignFn: assignmentStub()
   })
 
   assert.deepEqual(result, {
@@ -326,7 +351,8 @@ test('rechaza otro archivo completado para la misma fecha', async () => {
     () => persistPortfolio({
       pool: context.pool,
       empresaId: 7,
-      portfolio: portfolio()
+      portfolio: portfolio(),
+      assignFn: assignmentStub()
     }),
     error => (
       error.code === 'BAZ_IMPORT_DATE_ALREADY_COMPLETED'
@@ -357,7 +383,8 @@ test('hace rollback si el snapshot ya existe', async () => {
     () => persistPortfolio({
       pool: context.pool,
       empresaId: 7,
-      portfolio: portfolio()
+      portfolio: portfolio(),
+      assignFn: assignmentStub()
     }),
     error => (
       error.code === 'BAZ_SNAPSHOT_DUPLICATE'
@@ -422,12 +449,14 @@ test('cuenta campañas distintas al cerrar la importación', async () => {
   const result = await persistPortfolio({
     pool: context.pool,
     empresaId: 7,
-    portfolio: portfolio(records)
+    portfolio: portfolio(records),
+    assignFn: assignmentStub()
   })
 
   assert.equal(result.campaigns, 2)
   assert.equal(result.totalRows, 2)
   assert.equal(result.newRecords, 2)
+  assert.equal(result.assignedRecords, 2)
 })
 
 test('no guarda mensajes internos de PostgreSQL en la auditoría', async () => {
@@ -465,5 +494,87 @@ test('no guarda mensajes internos de PostgreSQL en la auditoría', async () => {
   assert.equal(
     calls[0].params[5],
     'Error interno durante la importación'
+  )
+})
+
+test('envía cada cuenta al round robin dentro de la importación', async () => {
+  const context = fakePool()
+  const assignFn = assignmentStub()
+
+  await persistPortfolio({
+    pool: context.pool,
+    empresaId: 7,
+    portfolio: portfolio(),
+    assignFn
+  })
+
+  assert.equal(assignFn.calls.length, 1)
+  assert.equal(assignFn.calls[0].client, context.client)
+  assert.equal(assignFn.calls[0].empresaId, 7)
+  assert.equal(assignFn.calls[0].cuentaId, 101)
+  assert.equal(
+    assignFn.calls[0].idCampania,
+    'CAMP-1'
+  )
+
+  const commitIndex = context.calls.findIndex(call => (
+    call.sql === 'COMMIT'
+  ))
+
+  assert.equal(commitIndex >= 0, true)
+})
+
+test('hace rollback si falla el round robin', async () => {
+  const context = fakePool()
+  const assignFn = async () => {
+    const error = new Error(
+      'No existen ejecutivos activos'
+    )
+    error.code = 'BAZ_ASSIGN_NO_EXECUTIVES'
+    throw error
+  }
+
+  await assert.rejects(
+    () => persistPortfolio({
+      pool: context.pool,
+      empresaId: 7,
+      portfolio: portfolio(),
+      assignFn
+    }),
+    error => (
+      error.code === 'BAZ_ASSIGN_NO_EXECUTIVES'
+    )
+  )
+
+  assert.equal(
+    context.calls.some(call => call.sql === 'ROLLBACK'),
+    true
+  )
+  assert.equal(
+    context.calls.some(call => call.sql === 'COMMIT'),
+    false
+  )
+})
+
+test('rechaza resultados desconocidos del asignador', async () => {
+  const context = fakePool()
+
+  await assert.rejects(
+    () => persistPortfolio({
+      pool: context.pool,
+      empresaId: 7,
+      portfolio: portfolio(),
+      assignFn: async () => ({
+        status: 'desconocido'
+      })
+    }),
+    error => (
+      error.code === 'BAZ_ASSIGN_RESULT_INVALID'
+    )
+  )
+
+  assert.equal(
+    context.calls.some(call => call.sql === 'ROLLBACK'),
+    true
   )
 })

@@ -1,3 +1,7 @@
+const {
+  assignRoundRobin
+} = require('./cartera-round-robin')
+
 const SNAPSHOT_FIELDS = [
   ['nombre', 'nombre'],
   ['id_genero', 'idGenero'],
@@ -549,13 +553,21 @@ async function persistPortfolio({
   pool,
   empresaId,
   portfolio,
-  creadoPor = null
+  creadoPor = null,
+  assignFn = assignRoundRobin
 }) {
   validatePersistenceInput({
     pool,
     empresaId,
     portfolio
   })
+
+  if (typeof assignFn !== 'function') {
+    throw new CarteraPersistenceError(
+      'BAZ_PERSIST_ASSIGNER_INVALID',
+      'La función de asignación no es válida'
+    )
+  }
 
   const client = await pool.connect()
   let transactionStarted = false
@@ -597,6 +609,8 @@ async function persistPortfolio({
 
     let newRecords = 0
     let updatedRecords = 0
+    let assignedRecords = 0
+    let keptAssignments = 0
     const campaigns = new Set()
 
     for (const record of portfolio.records) {
@@ -636,6 +650,24 @@ async function persistPortfolio({
       } else {
         updatedRecords++
       }
+
+      const assignment = await assignFn({
+        client,
+        empresaId,
+        cuentaId: account.id,
+        idCampania: record.identity.idCampania
+      })
+
+      if (assignment.status === 'assigned') {
+        assignedRecords++
+      } else if (assignment.status === 'kept') {
+        keptAssignments++
+      } else {
+        throw new CarteraPersistenceError(
+          'BAZ_ASSIGN_RESULT_INVALID',
+          'La asignación devolvió un estado desconocido'
+        )
+      }
     }
 
     await completeImport(
@@ -658,7 +690,9 @@ async function persistPortfolio({
       campaigns: campaigns.size,
       totalRows: portfolio.records.length,
       newRecords,
-      updatedRecords
+      updatedRecords,
+      assignedRecords,
+      keptAssignments
     }
   } catch (error) {
     if (transactionStarted) {
