@@ -29,6 +29,7 @@ uploads/
 # DATABASE
 # =========================
 *.sql
+!backend/migrations/*.sql
 *.dump
 *.gz
 
