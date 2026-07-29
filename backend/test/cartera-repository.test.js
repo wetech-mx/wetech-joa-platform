@@ -1,0 +1,469 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+
+const {
+  SNAPSHOT_FIELDS,
+  persistPortfolio,
+  recordFailedImport,
+  validatePersistenceInput
+} = require('../importers/cartera-repository')
+
+function portfolio(records = [
+  {
+    identity: {
+      idCampania: 'CAMP-1',
+      idCliente: 'CLIENTE-1'
+    },
+    snapshot: {
+      nombre: 'Cliente controlado',
+      saldo: 1000
+    }
+  }
+]) {
+  return {
+    date: '2026-07-29',
+    fileName: 'Cartera_BancoAzteca_2026-07-29.xlsx',
+    sha256: 'a'.repeat(64),
+    records
+  }
+}
+
+function fakePool({
+  existingByHash = null,
+  completedByDate = null,
+  accountInsertRows = [
+    {
+      id: 101
+    }
+  ],
+  snapshotRows = [
+    {
+      id: 201
+    }
+  ]
+} = {}) {
+  const calls = []
+  let accountInsertIndex = 0
+  let snapshotIndex = 0
+
+  const client = {
+    released: false,
+    async query(sql, params = []) {
+      const compact = String(sql)
+        .replace(/\s+/g, ' ')
+        .trim()
+
+      calls.push({
+        scope: 'client',
+        sql: compact,
+        params
+      })
+
+      if (
+        compact === 'BEGIN'
+        || compact === 'COMMIT'
+        || compact === 'ROLLBACK'
+        || compact.includes('pg_advisory_xact_lock')
+      ) {
+        return {
+          rows: []
+        }
+      }
+
+      if (
+        compact.includes('archivo_sha256 = $2')
+        && compact.includes('FOR UPDATE')
+      ) {
+        return {
+          rows: existingByHash
+            ? [existingByHash]
+            : []
+        }
+      }
+
+      if (
+        compact.includes("estado = 'completada'")
+        && compact.includes('fecha_cartera = $2')
+      ) {
+        return {
+          rows: completedByDate
+            ? [completedByDate]
+            : []
+        }
+      }
+
+      if (
+        compact.startsWith(
+          'INSERT INTO public.cartera_importaciones'
+        )
+      ) {
+        return {
+          rows: [
+            {
+              id: 11
+            }
+          ]
+        }
+      }
+
+      if (
+        compact.startsWith(
+          'UPDATE public.cartera_importaciones'
+        )
+        && compact.includes("estado = 'procesando'")
+      ) {
+        return {
+          rows: [
+            {
+              id: existingByHash?.id || 11
+            }
+          ]
+        }
+      }
+
+      if (
+        compact.startsWith(
+          'UPDATE public.cartera_importaciones'
+        )
+        && compact.includes("estado = 'completada'")
+      ) {
+        return {
+          rows: [
+            {
+              id: 11
+            }
+          ]
+        }
+      }
+
+      if (
+        compact.startsWith(
+          'INSERT INTO public.cartera_cuentas'
+        )
+      ) {
+        const row = accountInsertRows[
+          accountInsertIndex++
+        ]
+
+        return {
+          rows: row ? [row] : []
+        }
+      }
+
+      if (
+        compact.startsWith(
+          'UPDATE public.cartera_cuentas'
+        )
+      ) {
+        return {
+          rows: [
+            {
+              id: 102
+            }
+          ]
+        }
+      }
+
+      if (
+        compact.startsWith(
+          'INSERT INTO public.cartera_snapshots'
+        )
+      ) {
+        const row = snapshotRows[snapshotIndex++]
+
+        return {
+          rows: row ? [row] : []
+        }
+      }
+
+      return {
+        rows: []
+      }
+    },
+    release() {
+      this.released = true
+    }
+  }
+
+  const pool = {
+    failureCalls: [],
+    connectCalls: 0,
+    async connect() {
+      this.connectCalls++
+      return client
+    },
+    async query(sql, params = []) {
+      const compact = String(sql)
+        .replace(/\s+/g, ' ')
+        .trim()
+
+      this.failureCalls.push({
+        sql: compact,
+        params
+      })
+
+      return {
+        rows: []
+      }
+    }
+  }
+
+  return {
+    calls,
+    client,
+    pool
+  }
+}
+
+test('rechaza parámetros de persistencia incompletos', () => {
+  assert.throws(
+    () => validatePersistenceInput({
+      pool: {},
+      empresaId: 1,
+      portfolio: portfolio()
+    }),
+    error => (
+      error.code === 'BAZ_PERSIST_POOL_INVALID'
+    )
+  )
+})
+
+test('distribuye 32 campos de snapshot más dos identificadores', () => {
+  assert.equal(SNAPSHOT_FIELDS.length, 32)
+})
+
+test('importa una cuenta nueva en una transacción', async () => {
+  const context = fakePool()
+
+  const result = await persistPortfolio({
+    pool: context.pool,
+    empresaId: 7,
+    portfolio: portfolio(),
+    creadoPor: 3
+  })
+
+  assert.deepEqual(result, {
+    status: 'imported',
+    importacionId: 11,
+    campaigns: 1,
+    totalRows: 1,
+    newRecords: 1,
+    updatedRecords: 0
+  })
+  assert.equal(context.client.released, true)
+  assert.equal(
+    context.calls.some(call => call.sql === 'COMMIT'),
+    true
+  )
+  assert.equal(
+    context.calls.some(call => call.sql === 'ROLLBACK'),
+    false
+  )
+  assert.equal(context.pool.failureCalls.length, 0)
+})
+
+test('actualiza una cuenta existente sin duplicarla', async () => {
+  const context = fakePool({
+    accountInsertRows: []
+  })
+
+  const result = await persistPortfolio({
+    pool: context.pool,
+    empresaId: 7,
+    portfolio: portfolio()
+  })
+
+  assert.equal(result.newRecords, 0)
+  assert.equal(result.updatedRecords, 1)
+  assert.equal(
+    context.calls.some(call => (
+      call.sql.startsWith(
+        'UPDATE public.cartera_cuentas'
+      )
+    )),
+    true
+  )
+})
+
+test('no repite una importación completada con el mismo SHA', async () => {
+  const context = fakePool({
+    existingByHash: {
+      id: 55,
+      estado: 'completada'
+    }
+  })
+
+  const result = await persistPortfolio({
+    pool: context.pool,
+    empresaId: 7,
+    portfolio: portfolio()
+  })
+
+  assert.deepEqual(result, {
+    status: 'already_imported',
+    importacionId: 55,
+    totalRows: 1
+  })
+  assert.equal(
+    context.calls.some(call => call.sql === 'ROLLBACK'),
+    true
+  )
+  assert.equal(
+    context.calls.some(call => call.sql === 'COMMIT'),
+    false
+  )
+})
+
+test('rechaza otro archivo completado para la misma fecha', async () => {
+  const context = fakePool({
+    completedByDate: {
+      id: 50,
+      archivo_sha256: 'b'.repeat(64)
+    }
+  })
+
+  await assert.rejects(
+    () => persistPortfolio({
+      pool: context.pool,
+      empresaId: 7,
+      portfolio: portfolio()
+    }),
+    error => (
+      error.code === 'BAZ_IMPORT_DATE_ALREADY_COMPLETED'
+    )
+  )
+
+  assert.equal(
+    context.calls.some(call => call.sql === 'ROLLBACK'),
+    true
+  )
+  assert.equal(
+    context.calls.filter(call => (
+      call.sql.startsWith(
+        'INSERT INTO public.cartera_importaciones'
+      )
+      && String(call.params[4]).startsWith('BAZ_')
+    )).length,
+    1
+  )
+})
+
+test('hace rollback si el snapshot ya existe', async () => {
+  const context = fakePool({
+    snapshotRows: []
+  })
+
+  await assert.rejects(
+    () => persistPortfolio({
+      pool: context.pool,
+      empresaId: 7,
+      portfolio: portfolio()
+    }),
+    error => (
+      error.code === 'BAZ_SNAPSHOT_DUPLICATE'
+    )
+  )
+
+  assert.equal(
+    context.calls.some(call => call.sql === 'ROLLBACK'),
+    true
+  )
+  assert.equal(
+    context.calls.some(call => call.sql === 'COMMIT'),
+    false
+  )
+  assert.equal(
+    context.calls.filter(call => (
+      call.sql.startsWith(
+        'INSERT INTO public.cartera_importaciones'
+      )
+      && String(call.params[4]).startsWith('BAZ_')
+    )).length,
+    1
+  )
+})
+
+test('cuenta campañas distintas al cerrar la importación', async () => {
+  const context = fakePool({
+    accountInsertRows: [
+      {
+        id: 101
+      },
+      {
+        id: 102
+      }
+    ],
+    snapshotRows: [
+      {
+        id: 201
+      },
+      {
+        id: 202
+      }
+    ]
+  })
+  const records = [
+    {
+      identity: {
+        idCampania: 'CAMP-1',
+        idCliente: 'CLIENTE-1'
+      },
+      snapshot: {}
+    },
+    {
+      identity: {
+        idCampania: 'CAMP-2',
+        idCliente: 'CLIENTE-2'
+      },
+      snapshot: {}
+    }
+  ]
+
+  const result = await persistPortfolio({
+    pool: context.pool,
+    empresaId: 7,
+    portfolio: portfolio(records)
+  })
+
+  assert.equal(result.campaigns, 2)
+  assert.equal(result.totalRows, 2)
+  assert.equal(result.newRecords, 2)
+})
+
+test('no guarda mensajes internos de PostgreSQL en la auditoría', async () => {
+  const calls = []
+  const queryTarget = {
+    async query(sql, params) {
+      calls.push({
+        sql,
+        params
+      })
+
+      return {
+        rows: []
+      }
+    }
+  }
+
+  await recordFailedImport(
+    queryTarget,
+    {
+      empresaId: 7,
+      portfolio: portfolio(),
+      creadoPor: null,
+      error: {
+        code: '23505',
+        message: 'detalle interno que no debe persistirse'
+      }
+    }
+  )
+
+  assert.equal(
+    calls[0].params[4],
+    'BAZ_IMPORT_UNEXPECTED'
+  )
+  assert.equal(
+    calls[0].params[5],
+    'Error interno durante la importación'
+  )
+})
