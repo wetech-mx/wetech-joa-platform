@@ -8,6 +8,20 @@ class CarteraAssignmentError extends Error {
   }
 }
 
+function isPositiveDatabaseId(value) {
+  if (typeof value === 'number') {
+    return (
+      Number.isSafeInteger(value)
+      && value > 0
+    )
+  }
+
+  return (
+    typeof value === 'string'
+    && /^[1-9]\d*$/.test(value)
+  )
+}
+
 function validateAssignmentInput({
   client,
   empresaId,
@@ -28,10 +42,10 @@ function validateAssignmentInput({
     )
   }
 
-  if (!Number.isInteger(cuentaId) || cuentaId <= 0) {
+  if (!isPositiveDatabaseId(cuentaId)) {
     throw new CarteraAssignmentError(
       'BAZ_ASSIGN_ACCOUNT_INVALID',
-      'cuentaId debe ser un entero positivo'
+      'cuentaId debe ser un identificador positivo'
     )
   }
 
@@ -397,6 +411,7 @@ module.exports = {
   assignRoundRobin,
   chooseNextExecutive,
   findActiveAssignment,
+  isPositiveDatabaseId,
   listActiveExecutives,
   lockAccount,
   lockRoundRobinState,
