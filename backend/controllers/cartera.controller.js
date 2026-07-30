@@ -6,11 +6,23 @@ const {
   listPortfolio
 } = require('../repositories/cartera-read-repository')
 
+const {
+  CarteraManagementError,
+  addPortfolioNote,
+  reassignPortfolioAccount,
+  updatePortfolioState
+} = require(
+  '../repositories/cartera-management-repository'
+)
+
 function respondWithError(
   res,
   error
 ) {
-  if (error instanceof CarteraReadError) {
+  if (
+    error instanceof CarteraReadError
+    || error instanceof CarteraManagementError
+  ) {
     return res
       .status(error.status)
       .json({
@@ -67,8 +79,67 @@ async function obtenerCuentaCartera(
   }
 }
 
+async function agregarNotaCartera(
+  req,
+  res
+) {
+  try {
+    const result = await addPortfolioNote({
+      pool,
+      usuario: req.usuario,
+      accountId: req.params.id,
+      note: req.body?.nota
+    })
+
+    return res.status(201).json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function actualizarEstadoCartera(
+  req,
+  res
+) {
+  try {
+    const result = await updatePortfolioState({
+      pool,
+      usuario: req.usuario,
+      accountId: req.params.id,
+      state: req.body?.estado,
+      detail: req.body?.detalle
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function reasignarCuentaCartera(
+  req,
+  res
+) {
+  try {
+    const result = await reassignPortfolioAccount({
+      pool,
+      usuario: req.usuario,
+      accountId: req.params.id,
+      executiveId: req.body?.ejecutivo_id,
+      reason: req.body?.motivo
+    })
+
+    return res.status(201).json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
 module.exports = {
+  actualizarEstadoCartera,
+  agregarNotaCartera,
   obtenerCartera,
   obtenerCuentaCartera,
+  reasignarCuentaCartera,
   respondWithError
 }

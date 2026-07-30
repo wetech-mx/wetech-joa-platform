@@ -112,6 +112,21 @@ test('requiere empresa dentro de la sesión', () => {
   )
 })
 
+test('rechaza roles desconocidos', () => {
+  assert.throws(
+    () => resolveAccessScope({
+      id: 3,
+      empresa_id: 7,
+      rol: 'rol_desconocido'
+    }),
+    error => (
+      error.code ===
+      'CARTERA_ROLE_FORBIDDEN'
+      && error.status === 403
+    )
+  )
+})
+
 test('un Ejecutivo solo consulta sus asignaciones', async () => {
   const pool = mockPool([
     {

@@ -286,6 +286,20 @@ function resolveAccessScope(usuario = {}) {
     )
   }
 
+  const allowedRoles = new Set([
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN,
+    ROLES.EJECUTIVO
+  ])
+
+  if (!allowedRoles.has(usuario.rol)) {
+    throw new CarteraReadError(
+      'CARTERA_ROLE_FORBIDDEN',
+      'El rol de la sesión no puede consultar cartera',
+      403
+    )
+  }
+
   const isExecutive =
     usuario.rol === ROLES.EJECUTIVO
 

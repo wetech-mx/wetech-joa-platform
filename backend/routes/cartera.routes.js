@@ -1,12 +1,16 @@
 const express = require('express')
 
 const {
+  actualizarEstadoCartera,
+  agregarNotaCartera,
   obtenerCartera,
-  obtenerCuentaCartera
+  obtenerCuentaCartera,
+  reasignarCuentaCartera
 } = require('../controllers/cartera.controller')
 
 const {
   verificaToken,
+  requiereAdmin,
   requiereEmpresa
 } = require('../middleware/auth')
 
@@ -20,6 +24,22 @@ router.use(
 router.get(
   '/cartera',
   obtenerCartera
+)
+
+router.post(
+  '/cartera/:id/notas',
+  agregarNotaCartera
+)
+
+router.patch(
+  '/cartera/:id/estado',
+  actualizarEstadoCartera
+)
+
+router.post(
+  '/cartera/:id/reasignar',
+  requiereAdmin,
+  reasignarCuentaCartera
 )
 
 router.get(

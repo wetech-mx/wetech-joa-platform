@@ -18,9 +18,24 @@ const PRIORIDADES = Object.freeze({
   ALTA: 'Alta'
 })
 
+const CARTERA_ESTADOS = Object.freeze({
+  SIN_GESTIONAR: 'sin_gestionar',
+  CONTACTADO: 'contactado',
+  NO_LOCALIZADO: 'no_localizado',
+  SEGUIMIENTO: 'seguimiento',
+  PROMESA_PAGO: 'promesa_pago',
+  PROMESA_INCUMPLIDA: 'promesa_incumplida',
+  CONVENIO: 'convenio',
+  PAGO_REALIZADO: 'pago_realizado',
+  RECHAZO_PAGO: 'rechazo_pago',
+  DATOS_INCORRECTOS: 'datos_incorrectos',
+  CERRADO: 'cerrado'
+})
+
 module.exports = {
   ROLES,
   ESTADOS_LEAD,
-  PRIORIDADES
+  PRIORIDADES,
+  CARTERA_ESTADOS
 }
 
