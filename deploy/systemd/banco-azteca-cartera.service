@@ -14,6 +14,7 @@ WorkingDirectory=/opt/crm/backend
 Environment=NODE_ENV=production
 EnvironmentFile=-/etc/default/banco-azteca-cartera
 ExecStart=/usr/bin/node /opt/crm/backend/scripts/export-banco-azteca-daily.js
+ExecStartPost=/usr/bin/node /opt/crm/backend/scripts/import-banco-azteca-daily.js
 UMask=0027
 TimeoutStartSec=45min
 SyslogIdentifier=banco-azteca-cartera
