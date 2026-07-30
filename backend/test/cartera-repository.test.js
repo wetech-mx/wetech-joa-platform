@@ -12,7 +12,8 @@ function portfolio(records = [
   {
     identity: {
       idCampania: 'CAMP-1',
-      idCliente: 'CLIENTE-1'
+      idCliente: 'CLIENTE-1',
+      folio: 'FOLIO-1'
     },
     snapshot: {
       nombre: 'Cliente controlado',
@@ -433,14 +434,16 @@ test('cuenta campañas distintas al cerrar la importación', async () => {
     {
       identity: {
         idCampania: 'CAMP-1',
-        idCliente: 'CLIENTE-1'
+        idCliente: 'CLIENTE-1',
+        folio: 'FOLIO-1'
       },
       snapshot: {}
     },
     {
       identity: {
         idCampania: 'CAMP-2',
-        idCliente: 'CLIENTE-2'
+        idCliente: 'CLIENTE-2',
+        folio: 'FOLIO-2'
       },
       snapshot: {}
     }

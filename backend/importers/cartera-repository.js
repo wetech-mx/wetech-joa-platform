@@ -278,6 +278,7 @@ async function upsertAccount(
       empresa_id,
       id_campania,
       id_cliente,
+      folio,
       primera_fecha_cartera,
       ultima_fecha_cartera,
       ultima_importacion_id
@@ -288,14 +289,16 @@ async function upsertAccount(
       $2,
       $3,
       $4,
-      $4,
-      $5
+      $5,
+      $5,
+      $6
     )
     ON CONFLICT
     (
       empresa_id,
       id_campania,
-      id_cliente
+      id_cliente,
+      folio
     )
     DO NOTHING
     RETURNING id
@@ -304,6 +307,7 @@ async function upsertAccount(
       empresaId,
       identity.idCampania,
       identity.idCliente,
+      identity.folio,
       date,
       importacionId
     ]
@@ -322,16 +326,16 @@ async function upsertAccount(
     SET
       primera_fecha_cartera = LEAST(
         primera_fecha_cartera,
-        $4
+        $5
       ),
       ultima_importacion_id = CASE
-        WHEN $4 >= ultima_fecha_cartera
-          THEN $5
+        WHEN $5 >= ultima_fecha_cartera
+          THEN $6
         ELSE ultima_importacion_id
       END,
       ultima_fecha_cartera = GREATEST(
         ultima_fecha_cartera,
-        $4
+        $5
       ),
       activa = TRUE,
       actualizada_at = NOW()
@@ -339,12 +343,14 @@ async function upsertAccount(
       empresa_id = $1
       AND id_campania = $2
       AND id_cliente = $3
+      AND folio = $4
     RETURNING id
     `,
     [
       empresaId,
       identity.idCampania,
       identity.idCliente,
+      identity.folio,
       date,
       importacionId
     ]

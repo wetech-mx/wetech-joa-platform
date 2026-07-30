@@ -294,12 +294,22 @@ function transformPortfolioRow(row, rowNumber = 2) {
     'IdCliente',
     rowNumber
   )
+  const folio = normalizeRequiredIdentifier(
+    row.Folio,
+    'Folio',
+    rowNumber
+  )
 
   return {
     identity: {
       idCampania,
       idCliente,
-      key: `${idCampania}\u0000${idCliente}`
+      folio,
+      key: [
+        idCampania,
+        idCliente,
+        folio
+      ].join('\u0000')
     },
     snapshot: {
       nombre: normalizeText(row.Nombre),
@@ -340,22 +350,16 @@ function transformPortfolioRow(row, rowNumber = 2) {
       idPais: normalizeText(row.IdPais),
       idCanal: normalizeText(row.IdCanal),
       idSucursal: normalizeText(row.IdSucursal),
-      folio: normalizeText(row.Folio),
+      folio,
       semanasAtraso: normalizeInteger(
         row.SemanasAtraso,
         'SemanasAtraso',
-        rowNumber,
-        {
-          min: 0
-        }
+        rowNumber
       ),
       diasAtraso: normalizeInteger(
         row.DiasAtraso,
         'DiasAtraso',
-        rowNumber,
-        {
-          min: 0
-        }
+        rowNumber
       ),
       diaPago: normalizeText(row.DiaPago),
       saldo: normalizeDecimal(
@@ -427,12 +431,13 @@ function transformPortfolioRows(rows) {
     if (previousRow) {
       throw new CarteraImportError(
         'BAZ_IMPORT_DUPLICATE_IDENTITY',
-        `Las filas ${previousRow} y ${rowNumber} repiten IdCampaña + IdCliente`,
+        `Las filas ${previousRow} y ${rowNumber} repiten IdCampaña + IdCliente + Folio`,
         {
           firstRow: previousRow,
           duplicateRow: rowNumber,
           idCampania: record.identity.idCampania,
-          idCliente: record.identity.idCliente
+          idCliente: record.identity.idCliente,
+          folio: record.identity.folio
         }
       )
     }

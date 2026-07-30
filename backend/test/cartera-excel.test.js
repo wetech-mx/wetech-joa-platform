@@ -173,6 +173,7 @@ test('lee un Excel válido sin insertar datos', async () => {
   row[1] = 'CLIENTE-1'
   row[2] = 'Cliente de prueba'
   row[4] = 45
+  row[20] = 'FOLIO-1'
   row[21] = 3
   row[22] = 21
   row[24] = 1234.5
@@ -236,6 +237,7 @@ test('transforma una fila a tipos compatibles con PostgreSQL', () => {
   const record = transformPortfolioRow({
     IdCampaña: 10,
     IdCliente: '000123456789012345',
+    Folio: 'FOLIO-0001',
     Nombre: '  Cliente Controlado  ',
     Edad: '45',
     SemanasAtraso: 3,
@@ -255,6 +257,10 @@ test('transforma una fila a tipos compatibles con PostgreSQL', () => {
   assert.equal(
     record.identity.idCliente,
     '000123456789012345'
+  )
+  assert.equal(
+    record.identity.folio,
+    'FOLIO-0001'
   )
   assert.equal(
     record.snapshot.nombre,
@@ -285,6 +291,7 @@ test('convierte valores vacíos a null', () => {
   const record = transformPortfolioRow({
     IdCampaña: 'CAMP-1',
     IdCliente: 'CLIENTE-1',
+    Folio: 'FOLIO-1',
     Nombre: '   ',
     Edad: '',
     Saldo: null,
@@ -372,11 +379,13 @@ test('rechaza identidades duplicadas dentro del Excel', () => {
     () => transformPortfolioRows([
       {
         IdCampaña: 'CAMP-1',
-        IdCliente: 'CLIENTE-1'
+        IdCliente: 'CLIENTE-1',
+        Folio: 'FOLIO-1'
       },
       {
         IdCampaña: 'CAMP-1',
-        IdCliente: 'CLIENTE-1'
+        IdCliente: 'CLIENTE-1',
+        Folio: 'FOLIO-1'
       }
     ]),
     error => (
@@ -391,11 +400,13 @@ test('permite el mismo cliente en campañas distintas', () => {
   const records = transformPortfolioRows([
     {
       IdCampaña: 'CAMP-1',
-      IdCliente: 'CLIENTE-1'
+      IdCliente: 'CLIENTE-1',
+      Folio: 'FOLIO-1'
     },
     {
       IdCampaña: 'CAMP-2',
-      IdCliente: 'CLIENTE-1'
+      IdCliente: 'CLIENTE-1',
+      Folio: 'FOLIO-1'
     }
   ])
 
