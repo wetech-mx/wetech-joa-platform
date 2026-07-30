@@ -9,6 +9,7 @@ import LeadsKanban from './LeadsKanban'
 import Login from './Login'
 import BancoAzteca from './BancoAzteca'
 import Cartera from './Cartera'
+import { apiFetch } from './api'
 
 export default function App() {
 
@@ -223,36 +224,80 @@ const actualizarNotas = async (id, notas) => {
 
 useEffect(() => {
 
-  if (!usuario) return
+  if (!usuario) return undefined
 
-  const token = localStorage.getItem('token')
+  let active = true
 
+  async function cargarDatosIniciales() {
+    try {
+      const responses = await Promise.all([
+        apiFetch('/crm-api/leads'),
+        apiFetch('/crm-api/alertas'),
+        apiFetch('/crm-api/usuarios-activos')
+      ])
 
-  fetch('/crm-api/leads', {
-    headers: {
-      Authorization: `Bearer ${token}`
+      for (const response of responses) {
+        if (!response.ok) {
+          throw new Error(
+            `Error HTTP ${response.status}`
+          )
+        }
+      }
+
+      const [
+        leadsData,
+        alertasData,
+        usuariosData
+      ] = await Promise.all(
+        responses.map(response => response.json())
+      )
+
+      if (!active) return
+
+      setLeads(
+        Array.isArray(leadsData)
+          ? leadsData
+          : []
+      )
+
+      setAlertas({
+        vencidos: Array.isArray(
+          alertasData?.vencidos
+        )
+          ? alertasData.vencidos
+          : [],
+        hoy: Array.isArray(alertasData?.hoy)
+          ? alertasData.hoy
+          : []
+      })
+
+      setUsuarios(
+        Array.isArray(usuariosData)
+          ? usuariosData
+          : []
+      )
+    } catch (error) {
+      console.error(
+        'Error cargando datos iniciales:',
+        error
+      )
+
+      if (active) {
+        setLeads([])
+        setAlertas({
+          vencidos: [],
+          hoy: []
+        })
+        setUsuarios([])
+      }
     }
-  })
-    .then(res => res.json())
-    .then(data => {
-
-  if(!Array.isArray(data)){
-    console.error(data)
-    return
   }
 
-  setLeads(data)
+  cargarDatosIniciales()
 
-})
-  
-
-  fetch('/crm-api/alertas')
-    .then(res => res.json())
-    .then(data => setAlertas(data))
-
-  fetch('/crm-api/usuarios-activos')
-    .then(res => res.json())
-    .then(data => setUsuarios(data))
+  return () => {
+    active = false
+  }
 
 }, [usuario])
 
@@ -302,17 +347,26 @@ const leadsVisibles =
       )
     : leadsFiltrados
   
+const alertasSeguras = {
+  vencidos: Array.isArray(alertas?.vencidos)
+    ? alertas.vencidos
+    : [],
+  hoy: Array.isArray(alertas?.hoy)
+    ? alertas.hoy
+    : []
+}
+
 const alertasVisibles =
   usuario?.rol === 'Ejecutivo'
     ? {
-        vencidos: alertas.vencidos.filter(
+        vencidos: alertasSeguras.vencidos.filter(
           item => item.usuario_id === usuario.id
         ),
-        hoy: alertas.hoy.filter(
+        hoy: alertasSeguras.hoy.filter(
           item => item.usuario_id === usuario.id
         )
       }
-    : alertas
+    : alertasSeguras
 
 
 if (!usuario) {
