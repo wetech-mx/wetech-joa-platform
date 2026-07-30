@@ -4,6 +4,7 @@ const assert = require('node:assert/strict')
 const {
   CarteraReadError,
   getPortfolioAccount,
+  listPortfolioExecutives,
   listPortfolio,
   normalizeBigintId,
   normalizeListFilters,
@@ -303,4 +304,43 @@ test('devuelve detalle e historial de una cuenta válida', async () => {
   assert.equal(result.account.id, '123')
   assert.equal(result.history.length, 1)
   assert.equal(pool.calls.length, 2)
+})
+
+test('lista únicamente Ejecutivos activos de la empresa', async () => {
+  const pool = mockPool([
+    {
+      rows: [
+        {
+          id: 12,
+          nombre: 'Ejecutivo controlado'
+        }
+      ]
+    }
+  ])
+
+  const result = await listPortfolioExecutives({
+    pool,
+    usuario: {
+      id: 1,
+      empresa_id: 7,
+      rol: ROLES.SUPER_ADMIN
+    }
+  })
+
+  assert.equal(result.length, 1)
+  assert.match(
+    pool.calls[0].text,
+    /empresa_id = \$1/
+  )
+  assert.match(
+    pool.calls[0].text,
+    /activo = TRUE/
+  )
+  assert.deepEqual(
+    pool.calls[0].values,
+    [
+      7,
+      ROLES.EJECUTIVO
+    ]
+  )
 })

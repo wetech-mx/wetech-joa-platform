@@ -5,6 +5,7 @@ const {
   agregarNotaCartera,
   obtenerCartera,
   obtenerCuentaCartera,
+  obtenerEjecutivosCartera,
   reasignarCuentaCartera
 } = require('../controllers/cartera.controller')
 
@@ -24,6 +25,11 @@ router.use(
 router.get(
   '/cartera',
   obtenerCartera
+)
+
+router.get(
+  '/cartera/ejecutivos',
+  obtenerEjecutivosCartera
 )
 
 router.post(

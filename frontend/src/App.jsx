@@ -8,6 +8,7 @@ import LeadsKanban from './LeadsKanban'
 
 import Login from './Login'
 import BancoAzteca from './BancoAzteca'
+import Cartera from './Cartera'
 
 export default function App() {
 
@@ -352,6 +353,13 @@ if (!usuario) {
            Leads
           </button>
 
+          <button
+            onClick={() => setPantalla('cartera')}
+            className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition"
+          >
+            Cartera
+          </button>
+
           {usuario?.rol !== 'Ejecutivo' && (
             <button
               onClick={() => setPantalla('banco-azteca')}
@@ -381,7 +389,7 @@ if (!usuario) {
 
       </aside>
 
-      <main className="flex-1 p-10">
+      <main className="min-w-0 flex-1 p-10">
 
 {pantalla === 'usuarios' && (
   <Usuarios />
@@ -389,6 +397,10 @@ if (!usuario) {
 
 {pantalla === 'banco-azteca' && (
   <BancoAzteca />
+)}
+
+{pantalla === 'cartera' && (
+  <Cartera usuario={usuario} />
 )}
 
 {pantalla === 'leads' && (

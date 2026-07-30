@@ -3,6 +3,7 @@ const pool = require('../config/database')
 const {
   CarteraReadError,
   getPortfolioAccount,
+  listPortfolioExecutives,
   listPortfolio
 } = require('../repositories/cartera-read-repository')
 
@@ -79,6 +80,22 @@ async function obtenerCuentaCartera(
   }
 }
 
+async function obtenerEjecutivosCartera(
+  req,
+  res
+) {
+  try {
+    const result = await listPortfolioExecutives({
+      pool,
+      usuario: req.usuario
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
 async function agregarNotaCartera(
   req,
   res
@@ -140,6 +157,7 @@ module.exports = {
   agregarNotaCartera,
   obtenerCartera,
   obtenerCuentaCartera,
+  obtenerEjecutivosCartera,
   reasignarCuentaCartera,
   respondWithError
 }

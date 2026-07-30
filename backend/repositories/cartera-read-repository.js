@@ -687,11 +687,49 @@ async function getPortfolioAccount({
   }
 }
 
+async function listPortfolioExecutives({
+  pool,
+  usuario
+}) {
+  if (!pool || typeof pool.query !== 'function') {
+    throw new CarteraReadError(
+      'CARTERA_POOL_INVALID',
+      'La conexión de datos no es válida',
+      500
+    )
+  }
+
+  const scope = resolveAccessScope(usuario)
+
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      nombre
+    FROM public.usuarios
+    WHERE
+      empresa_id = $1
+      AND rol = $2
+      AND activo = TRUE
+    ORDER BY
+      nombre,
+      id
+    `,
+    [
+      scope.empresaId,
+      ROLES.EJECUTIVO
+    ]
+  )
+
+  return result.rows
+}
+
 module.exports = {
   CarteraReadError,
   buildListStatement,
   getPortfolioAccount,
   isValidIsoDate,
+  listPortfolioExecutives,
   listPortfolio,
   normalizeBigintId,
   normalizeListFilters,
