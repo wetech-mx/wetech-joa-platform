@@ -9,6 +9,7 @@ import LeadsKanban from './LeadsKanban'
 import Login from './Login'
 import BancoAzteca from './BancoAzteca'
 import Cartera from './Cartera'
+import CarteraDashboard from './CarteraDashboard'
 import { apiFetch } from './api'
 
 export default function App() {
@@ -629,6 +630,9 @@ if (!usuario) {
   </div>
 )}
 
+  <p className="mb-3 text-sm font-bold text-blue-600">
+    RESUMEN DE LEADS
+  </p>
   <div className="grid grid-cols-5 gap-4 mb-8">
 
   <div className="bg-blue-50 border-l-4 border-blue-500 rounded-2xl p-4 shadow">
@@ -671,6 +675,8 @@ if (!usuario) {
 </div>
  
 </div>
+
+<CarteraDashboard />
 </>
 )}
 

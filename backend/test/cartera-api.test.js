@@ -4,6 +4,7 @@ const assert = require('node:assert/strict')
 const {
   CarteraReadError,
   getPortfolioAccount,
+  getPortfolioSummary,
   listPortfolioExecutives,
   listPortfolio,
   normalizeBigintId,
@@ -201,6 +202,124 @@ test('un Administrador puede filtrar por Ejecutivo', async () => {
   assert.ok(
     pool.calls[0].values.includes(99)
   )
+})
+
+test('resume la cartera activa de la empresa', async () => {
+  const pool = mockPool([
+    {
+      rows: [
+        {
+          total_cuentas: '200',
+          asignadas: '180',
+          sin_asignar: '20',
+          campanias: '2',
+          saldo_total: '125000.50',
+          pago_requerido_total: '31000.25',
+          ultima_fecha_cartera: '2026-07-30'
+        }
+      ]
+    },
+    {
+      rows: [
+        {
+          estado: 'sin_gestionar',
+          total: '150'
+        }
+      ]
+    },
+    {
+      rows: [
+        {
+          riesgo: 'Alto',
+          total: '90'
+        }
+      ]
+    },
+    {
+      rows: [
+        {
+          ejecutivo_id: '12',
+          ejecutivo: 'Ejecutivo controlado',
+          total: '100'
+        }
+      ]
+    }
+  ])
+
+  const result = await getPortfolioSummary({
+    pool,
+    usuario: {
+      id: 2,
+      empresa_id: 7,
+      rol: ROLES.ADMIN
+    }
+  })
+
+  assert.equal(result.scope, 'empresa')
+  assert.deepEqual(result.totals, {
+    accounts: 200,
+    assigned: 180,
+    unassigned: 20,
+    campaigns: 2,
+    balance: '125000.50',
+    requiredPayment: '31000.25',
+    portfolioDate: '2026-07-30'
+  })
+  assert.deepEqual(result.states, [
+    {
+      state: 'sin_gestionar',
+      total: 150
+    }
+  ])
+  assert.equal(pool.calls.length, 4)
+
+  for (const call of pool.calls) {
+    assert.match(call.text, /c\.empresa_id = \$1/)
+    assert.deepEqual(call.values, [7])
+  }
+})
+
+test('el resumen de Ejecutivo conserva su alcance', async () => {
+  const pool = mockPool([
+    {
+      rows: [
+        {
+          total_cuentas: '10',
+          asignadas: '10',
+          sin_asignar: '0',
+          campanias: '1',
+          saldo_total: '5000',
+          pago_requerido_total: '1000',
+          ultima_fecha_cartera: '2026-07-30'
+        }
+      ]
+    },
+    {
+      rows: []
+    },
+    {
+      rows: []
+    },
+    {
+      rows: []
+    }
+  ])
+
+  const result = await getPortfolioSummary({
+    pool,
+    usuario: {
+      id: 12,
+      empresa_id: 7,
+      rol: ROLES.EJECUTIVO
+    }
+  })
+
+  assert.equal(result.scope, 'ejecutivo')
+
+  for (const call of pool.calls) {
+    assert.match(call.text, /a\.usuario_id = \$2/)
+    assert.deepEqual(call.values, [7, 12])
+  }
 })
 
 test('parametriza el texto de búsqueda', async () => {

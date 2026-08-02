@@ -550,6 +550,195 @@ async function listPortfolio({
   }
 }
 
+function buildSummaryStatement(scope) {
+  const values = [scope.empresaId]
+  const conditions = [
+    'c.empresa_id = $1',
+    'c.activa = TRUE'
+  ]
+
+  if (scope.isExecutive) {
+    values.push(scope.userId)
+    conditions.push(
+      `a.usuario_id = $${values.length}`
+    )
+  }
+
+  return {
+    from: `
+      FROM public.cartera_cuentas c
+      LEFT JOIN public.cartera_snapshots s
+        ON s.cuenta_id = c.id
+        AND s.importacion_id =
+          c.ultima_importacion_id
+      LEFT JOIN public.cartera_asignaciones a
+        ON a.cuenta_id = c.id
+        AND a.activa = TRUE
+      LEFT JOIN public.usuarios u
+        ON u.id = a.usuario_id
+    `,
+    where: `
+      WHERE ${conditions.join('\n        AND ')}
+    `,
+    values
+  }
+}
+
+function countValue(value) {
+  const number = Number(value || 0)
+
+  return Number.isSafeInteger(number)
+    && number >= 0
+    ? number
+    : 0
+}
+
+function moneyValue(value) {
+  const text = String(value ?? '0').trim()
+
+  return /^-?\d+(\.\d+)?$/.test(text)
+    ? text
+    : '0'
+}
+
+async function getPortfolioSummary({
+  pool,
+  usuario
+}) {
+  if (!pool || typeof pool.query !== 'function') {
+    throw new CarteraReadError(
+      'CARTERA_POOL_INVALID',
+      'La conexión de datos no es válida',
+      500
+    )
+  }
+
+  const scope = resolveAccessScope(usuario)
+  const statement = buildSummaryStatement(scope)
+
+  const [
+    totalsResult,
+    statesResult,
+    risksResult,
+    executivesResult
+  ] = await Promise.all([
+    pool.query(
+      `
+      SELECT
+        COUNT(*) AS total_cuentas,
+        COUNT(*) FILTER (
+          WHERE a.id IS NOT NULL
+        ) AS asignadas,
+        COUNT(*) FILTER (
+          WHERE a.id IS NULL
+        ) AS sin_asignar,
+        COUNT(
+          DISTINCT c.id_campania
+        ) AS campanias,
+        COALESCE(
+          SUM(s.saldo),
+          0
+        ) AS saldo_total,
+        COALESCE(
+          SUM(s.pago_requerido),
+          0
+        ) AS pago_requerido_total,
+        MAX(c.ultima_fecha_cartera)
+          AS ultima_fecha_cartera
+      ${statement.from}
+      ${statement.where}
+      `,
+      statement.values
+    ),
+    pool.query(
+      `
+      SELECT
+        c.estado_gestion AS estado,
+        COUNT(*) AS total
+      ${statement.from}
+      ${statement.where}
+      GROUP BY c.estado_gestion
+      ORDER BY
+        COUNT(*) DESC,
+        c.estado_gestion
+      `,
+      statement.values
+    ),
+    pool.query(
+      `
+      SELECT
+        COALESCE(
+          NULLIF(s.id_nivel_riesgo, ''),
+          'Sin nivel'
+        ) AS riesgo,
+        COUNT(*) AS total
+      ${statement.from}
+      ${statement.where}
+      GROUP BY 1
+      ORDER BY
+        COUNT(*) DESC,
+        riesgo
+      `,
+      statement.values
+    ),
+    pool.query(
+      `
+      SELECT
+        a.usuario_id AS ejecutivo_id,
+        COALESCE(
+          u.nombre,
+          'Sin asignar'
+        ) AS ejecutivo,
+        COUNT(*) AS total
+      ${statement.from}
+      ${statement.where}
+      GROUP BY
+        a.usuario_id,
+        u.nombre
+      ORDER BY
+        COUNT(*) DESC,
+        ejecutivo
+      `,
+      statement.values
+    )
+  ])
+
+  const totals = totalsResult.rows[0] || {}
+
+  return {
+    scope: scope.isExecutive
+      ? 'ejecutivo'
+      : 'empresa',
+    totals: {
+      accounts: countValue(totals.total_cuentas),
+      assigned: countValue(totals.asignadas),
+      unassigned: countValue(totals.sin_asignar),
+      campaigns: countValue(totals.campanias),
+      balance: moneyValue(totals.saldo_total),
+      requiredPayment: moneyValue(
+        totals.pago_requerido_total
+      ),
+      portfolioDate:
+        totals.ultima_fecha_cartera || null
+    },
+    states: statesResult.rows.map(row => ({
+      state: row.estado,
+      total: countValue(row.total)
+    })),
+    risks: risksResult.rows.map(row => ({
+      risk: row.riesgo,
+      total: countValue(row.total)
+    })),
+    executives: executivesResult.rows.map(row => ({
+      id: row.ejecutivo_id === null
+        ? null
+        : String(row.ejecutivo_id),
+      name: row.ejecutivo,
+      total: countValue(row.total)
+    }))
+  }
+}
+
 async function getPortfolioAccount({
   pool,
   usuario,
@@ -727,7 +916,9 @@ async function listPortfolioExecutives({
 module.exports = {
   CarteraReadError,
   buildListStatement,
+  buildSummaryStatement,
   getPortfolioAccount,
+  getPortfolioSummary,
   isValidIsoDate,
   listPortfolioExecutives,
   listPortfolio,

@@ -1,0 +1,56 @@
+'use strict'
+
+const test = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+
+const root = path.resolve(__dirname, '../..')
+
+function read(relativePath) {
+  return fs.readFileSync(
+    path.join(root, relativePath),
+    'utf8'
+  )
+}
+
+test('expone el resumen dentro de rutas protegidas de cartera', () => {
+  const routes = read('backend/routes/cartera.routes.js')
+
+  assert.match(
+    routes,
+    /router\.use\(\s*verificaToken,\s*requiereEmpresa\s*\)/
+  )
+  assert.match(
+    routes,
+    /'\/cartera\/resumen',\s*obtenerResumenCartera/
+  )
+})
+
+test('el Dashboard consulta el resumen con el cliente autenticado', () => {
+  const dashboard = read(
+    'frontend/src/CarteraDashboard.jsx'
+  )
+
+  assert.match(
+    dashboard,
+    /apiFetch\('\/crm-api\/cartera\/resumen'/
+  )
+  assert.doesNotMatch(
+    dashboard,
+    /localStorage\.getItem\('token'\)/
+  )
+})
+
+test('la pantalla Dashboard incorpora las métricas de cartera', () => {
+  const app = read('frontend/src/App.jsx')
+
+  assert.match(
+    app,
+    /import CarteraDashboard from '\.\/CarteraDashboard'/
+  )
+  assert.match(
+    app,
+    /<CarteraDashboard\s*\/>/
+  )
+})
