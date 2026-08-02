@@ -115,15 +115,65 @@ function DistributionList({
 
 export default function CarteraDashboard() {
   const [summary, setSummary] = useState(null)
+  const [origins, setOrigins] = useState([])
+  const [selectedOriginId, setSelectedOriginId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshVersion, setRefreshVersion] = useState(0)
 
+  const selectedOrigin = origins.find(
+    item => String(item.id) === String(selectedOriginId)
+  )
+
+  useEffect(() => {
+    let active = true
+
+    apiFetch('/crm-api/cartera/origenes')
+      .then(async response => {
+        const data = await response
+          .json()
+          .catch(() => ({}))
+
+        if (!response.ok) {
+          throw new Error(
+            data.error
+            || 'No fue posible consultar los orígenes'
+          )
+        }
+
+        return data
+      })
+      .then(data => {
+        if (active && Array.isArray(data)) {
+          setOrigins(data)
+        }
+      })
+      .catch(requestError => {
+        if (active) {
+          setError(requestError.message)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   useEffect(() => {
     const controller = new AbortController()
     let active = true
+    const params = new URLSearchParams()
 
-    apiFetch('/crm-api/cartera/resumen', {
+    if (selectedOriginId) {
+      params.set('origen', selectedOriginId)
+    }
+
+    const query = params.toString()
+    const endpoint = query
+      ? `/crm-api/cartera/resumen?${query}`
+      : '/crm-api/cartera/resumen'
+
+    apiFetch(endpoint, {
       signal: controller.signal
     })
       .then(async response => {
@@ -165,7 +215,10 @@ export default function CarteraDashboard() {
       active = false
       controller.abort()
     }
-  }, [refreshVersion])
+  }, [
+    refreshVersion,
+    selectedOriginId
+  ])
 
   const totals = summary?.totals || EMPTY_TOTALS
   const states = Array.isArray(summary?.states)
@@ -183,7 +236,9 @@ export default function CarteraDashboard() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-orange-600">
-            CARTERA BANCO AZTECA
+            {selectedOrigin
+              ? `CARTERA · ${selectedOrigin.nombre.toUpperCase()}`
+              : 'CARTERA · TODOS LOS ORÍGENES'}
           </p>
           <h2 className="mt-1 text-3xl font-bold">
             Resumen operativo
@@ -196,17 +251,41 @@ export default function CarteraDashboard() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setLoading(true)
-            setRefreshVersion(value => value + 1)
-          }}
-          disabled={loading}
-          className="rounded-xl border border-gray-300 bg-white px-4 py-2 font-bold text-gray-700 hover:bg-gray-50 disabled:text-gray-400"
-        >
-          {loading ? 'Consultando…' : 'Actualizar resumen'}
-        </button>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm font-bold text-gray-700">
+            Origen
+            <select
+              value={selectedOriginId}
+              onChange={event => {
+                setLoading(true)
+                setSelectedOriginId(event.target.value)
+              }}
+              className="mt-2 block min-w-56 rounded-xl border border-gray-300 bg-white px-4 py-2 font-normal"
+            >
+              <option value="">Todos los orígenes</option>
+              {origins.map(item => (
+                <option
+                  key={item.id}
+                  value={item.id}
+                >
+                  {item.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true)
+              setRefreshVersion(value => value + 1)
+            }}
+            disabled={loading}
+            className="rounded-xl border border-gray-300 bg-white px-4 py-2 font-bold text-gray-700 hover:bg-gray-50 disabled:text-gray-400"
+          >
+            {loading ? 'Consultando…' : 'Actualizar resumen'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -253,7 +332,8 @@ export default function CarteraDashboard() {
 
       {Number(totals.accounts) === 0 && !loading && !error && (
         <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-5 text-orange-800">
-          El resumen se llenará automáticamente cuando exista una cartera importada.
+          El resumen se llenará automáticamente cuando exista una
+          cartera importada para el origen seleccionado.
         </div>
       )}
 

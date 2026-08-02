@@ -85,6 +85,21 @@ function normalizeBigintId(
   return text
 }
 
+function normalizeOptionalBigintId(
+  value,
+  field
+) {
+  if (
+    value === undefined
+    || value === null
+    || String(value).trim() === ''
+  ) {
+    return null
+  }
+
+  return normalizeBigintId(value, field)
+}
+
 function normalizeText(
   value,
   {
@@ -246,6 +261,10 @@ function normalizeListFilters(query = {}) {
         defaultValue: null
       }
     ),
+    originId: normalizeOptionalBigintId(
+      query.origen,
+      'origen'
+    ),
     date: normalizeDate(query.fecha),
     active: normalizeActive(query.activa)
   }
@@ -322,6 +341,46 @@ function resolveAccessScope(usuario = {}) {
   }
 }
 
+async function resolvePortfolioOrigin({
+  pool,
+  scope,
+  originId
+}) {
+  if (!originId) {
+    return null
+  }
+
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      codigo,
+      nombre,
+      tipo
+    FROM public.crm_origenes
+    WHERE
+      id = $1
+      AND empresa_id = $2
+      AND activo = TRUE
+    LIMIT 1
+    `,
+    [
+      originId,
+      scope.empresaId
+    ]
+  )
+
+  if (!result.rows[0]) {
+    throw new CarteraReadError(
+      'CARTERA_ORIGIN_NOT_FOUND',
+      'El origen solicitado no pertenece a la empresa',
+      404
+    )
+  }
+
+  return result.rows[0]
+}
+
 function addCondition(
   conditions,
   values,
@@ -350,6 +409,15 @@ function buildListStatement({
     'c.empresa_id = ?',
     scope.empresaId
   )
+
+  if (filters.originId) {
+    addCondition(
+      conditions,
+      values,
+      'c.origen_id = ?',
+      filters.originId
+    )
+  }
 
   if (scope.isExecutive) {
     addCondition(
@@ -444,6 +512,9 @@ function buildListStatement({
       AND a.activa = TRUE
     LEFT JOIN public.usuarios u
       ON u.id = a.usuario_id
+    INNER JOIN public.crm_origenes o
+      ON o.id = c.origen_id
+      AND o.empresa_id = c.empresa_id
   `
 
   const where = `
@@ -472,6 +543,11 @@ async function listPortfolio({
 
   const filters = normalizeListFilters(query)
   const scope = resolveAccessScope(usuario)
+  const origin = await resolvePortfolioOrigin({
+    pool,
+    scope,
+    originId: filters.originId
+  })
   const statement = buildListStatement({
     filters,
     scope
@@ -505,6 +581,9 @@ async function listPortfolio({
     `
     SELECT
       c.id,
+      c.origen_id,
+      o.codigo AS origen_codigo,
+      o.nombre AS origen_nombre,
       c.id_campania,
       c.id_cliente,
       c.folio,
@@ -539,6 +618,7 @@ async function listPortfolio({
 
   return {
     data: result.rows,
+    origin,
     pagination: {
       page: filters.page,
       limit: filters.limit,
@@ -550,7 +630,10 @@ async function listPortfolio({
   }
 }
 
-function buildSummaryStatement(scope) {
+function buildSummaryStatement(
+  scope,
+  originId = null
+) {
   const values = [scope.empresaId]
   const conditions = [
     'c.empresa_id = $1',
@@ -561,6 +644,13 @@ function buildSummaryStatement(scope) {
     values.push(scope.userId)
     conditions.push(
       `a.usuario_id = $${values.length}`
+    )
+  }
+
+  if (originId) {
+    values.push(originId)
+    conditions.push(
+      `c.origen_id = $${values.length}`
     )
   }
 
@@ -603,7 +693,8 @@ function moneyValue(value) {
 
 async function getPortfolioSummary({
   pool,
-  usuario
+  usuario,
+  query = {}
 }) {
   if (!pool || typeof pool.query !== 'function') {
     throw new CarteraReadError(
@@ -614,7 +705,19 @@ async function getPortfolioSummary({
   }
 
   const scope = resolveAccessScope(usuario)
-  const statement = buildSummaryStatement(scope)
+  const originId = normalizeOptionalBigintId(
+    query.origen,
+    'origen'
+  )
+  const origin = await resolvePortfolioOrigin({
+    pool,
+    scope,
+    originId
+  })
+  const statement = buildSummaryStatement(
+    scope,
+    originId
+  )
 
   const [
     totalsResult,
@@ -709,6 +812,7 @@ async function getPortfolioSummary({
     scope: scope.isExecutive
       ? 'ejecutivo'
       : 'empresa',
+    origin,
     totals: {
       accounts: countValue(totals.total_cuentas),
       assigned: countValue(totals.asignadas),
@@ -773,6 +877,9 @@ async function getPortfolioAccount({
     `
     SELECT
       c.id,
+      c.origen_id,
+      o.codigo AS origen_codigo,
+      o.nombre AS origen_nombre,
       c.id_campania,
       c.id_cliente,
       c.folio,
@@ -830,6 +937,9 @@ async function getPortfolioAccount({
       AND a.activa = TRUE
     LEFT JOIN public.usuarios u
       ON u.id = a.usuario_id
+    INNER JOIN public.crm_origenes o
+      ON o.id = c.origen_id
+      AND o.empresa_id = c.empresa_id
     WHERE
       c.id = $1
       AND c.empresa_id = $2
@@ -874,6 +984,55 @@ async function getPortfolioAccount({
     account: result.rows[0],
     history: history.rows
   }
+}
+
+async function listPortfolioOrigins({
+  pool,
+  usuario
+}) {
+  if (!pool || typeof pool.query !== 'function') {
+    throw new CarteraReadError(
+      'CARTERA_POOL_INVALID',
+      'La conexión de datos no es válida',
+      500
+    )
+  }
+
+  const scope = resolveAccessScope(usuario)
+  const result = await pool.query(
+    `
+    SELECT
+      o.id,
+      o.codigo,
+      o.nombre,
+      o.tipo,
+      o.descripcion,
+      COUNT(i.id) FILTER (
+        WHERE i.activo = TRUE
+      )::INTEGER AS integraciones_activas
+    FROM public.crm_origenes o
+    LEFT JOIN public.crm_integraciones i
+      ON i.origen_id = o.id
+      AND i.empresa_id = o.empresa_id
+    WHERE
+      o.empresa_id = $1
+      AND o.activo = TRUE
+    GROUP BY
+      o.id,
+      o.codigo,
+      o.nombre,
+      o.tipo,
+      o.descripcion
+    ORDER BY
+      o.nombre,
+      o.id
+    `,
+    [
+      scope.empresaId
+    ]
+  )
+
+  return result.rows
 }
 
 async function listPortfolioExecutives({
@@ -921,8 +1080,11 @@ module.exports = {
   getPortfolioSummary,
   isValidIsoDate,
   listPortfolioExecutives,
+  listPortfolioOrigins,
   listPortfolio,
   normalizeBigintId,
   normalizeListFilters,
-  resolveAccessScope
+  normalizeOptionalBigintId,
+  resolveAccessScope,
+  resolvePortfolioOrigin
 }

@@ -6,10 +6,12 @@ const {
   getPortfolioAccount,
   getPortfolioSummary,
   listPortfolioExecutives,
+  listPortfolioOrigins,
   listPortfolio,
   normalizeBigintId,
   normalizeListFilters,
-  resolveAccessScope
+  resolveAccessScope,
+  resolvePortfolioOrigin
 } = require('../repositories/cartera-read-repository')
 
 const {
@@ -56,6 +58,28 @@ test('limita cada página a un máximo de 100', () => {
 
   assert.equal(filters.page, 2)
   assert.equal(filters.limit, 100)
+})
+
+test('conserva el origen BIGINT como texto', () => {
+  const filters = normalizeListFilters({
+    origen: '9007199254740993'
+  })
+
+  assert.equal(
+    filters.originId,
+    '9007199254740993'
+  )
+})
+
+test('rechaza un origen con formato inválido', () => {
+  assert.throws(
+    () => normalizeListFilters({
+      origen: '1 OR TRUE'
+    }),
+    error => (
+      error.code === 'CARTERA_ID_INVALID'
+    )
+  )
 })
 
 test('rechaza una fecha de filtro imposible', () => {
@@ -204,6 +228,91 @@ test('un Administrador puede filtrar por Ejecutivo', async () => {
   )
 })
 
+test('filtra la cartera por un origen de la empresa', async () => {
+  const pool = mockPool([
+    {
+      rows: [
+        {
+          id: '20',
+          codigo: 'origen_controlado',
+          nombre: 'Origen controlado',
+          tipo: 'cliente_cobranza'
+        }
+      ]
+    },
+    {
+      rows: [
+        {
+          total: '1'
+        }
+      ]
+    },
+    {
+      rows: [
+        {
+          id: '100',
+          origen_id: '20'
+        }
+      ]
+    }
+  ])
+
+  const result = await listPortfolio({
+    pool,
+    usuario: {
+      id: 2,
+      empresa_id: 7,
+      rol: ROLES.ADMIN
+    },
+    query: {
+      origen: '20'
+    }
+  })
+
+  assert.equal(result.origin.id, '20')
+  assert.equal(result.data.length, 1)
+  assert.deepEqual(
+    pool.calls[0].values,
+    ['20', 7]
+  )
+  assert.match(
+    pool.calls[1].text,
+    /c\.origen_id/
+  )
+  assert.ok(
+    pool.calls[1].values.includes('20')
+  )
+})
+
+test('rechaza un origen ajeno a la empresa', async () => {
+  const pool = mockPool([
+    {
+      rows: []
+    }
+  ])
+
+  await assert.rejects(
+    resolvePortfolioOrigin({
+      pool,
+      scope: {
+        empresaId: 7
+      },
+      originId: '20'
+    }),
+    error => (
+      error instanceof CarteraReadError
+      && error.code ===
+        'CARTERA_ORIGIN_NOT_FOUND'
+      && error.status === 404
+    )
+  )
+
+  assert.deepEqual(
+    pool.calls[0].values,
+    ['20', 7]
+  )
+})
+
 test('resume la cartera activa de la empresa', async () => {
   const pool = mockPool([
     {
@@ -276,6 +385,62 @@ test('resume la cartera activa de la empresa', async () => {
   for (const call of pool.calls) {
     assert.match(call.text, /c\.empresa_id = \$1/)
     assert.deepEqual(call.values, [7])
+  }
+})
+
+test('filtra el resumen por origen validado', async () => {
+  const pool = mockPool([
+    {
+      rows: [
+        {
+          id: '20',
+          codigo: 'origen_controlado',
+          nombre: 'Origen controlado',
+          tipo: 'cliente_cobranza'
+        }
+      ]
+    },
+    {
+      rows: [
+        {
+          total_cuentas: '0',
+          asignadas: '0',
+          sin_asignar: '0',
+          campanias: '0',
+          saldo_total: '0',
+          pago_requerido_total: '0',
+          ultima_fecha_cartera: null
+        }
+      ]
+    },
+    {
+      rows: []
+    },
+    {
+      rows: []
+    },
+    {
+      rows: []
+    }
+  ])
+
+  const result = await getPortfolioSummary({
+    pool,
+    usuario: {
+      id: 2,
+      empresa_id: 7,
+      rol: ROLES.ADMIN
+    },
+    query: {
+      origen: '20'
+    }
+  })
+
+  assert.equal(result.origin.id, '20')
+
+  for (const call of pool.calls.slice(1)) {
+    assert.match(call.text, /c\.origen_id = \$2/)
+    assert.deepEqual(call.values, [7, '20'])
   }
 })
 
@@ -461,5 +626,42 @@ test('lista únicamente Ejecutivos activos de la empresa', async () => {
       7,
       ROLES.EJECUTIVO
     ]
+  )
+})
+
+test('lista orígenes activos sin exponer referencias secretas', async () => {
+  const pool = mockPool([
+    {
+      rows: [
+        {
+          id: '20',
+          codigo: 'banco_azteca',
+          nombre: 'Banco Azteca',
+          tipo: 'cliente_cobranza',
+          descripcion: 'Origen controlado',
+          integraciones_activas: 1
+        }
+      ]
+    }
+  ])
+
+  const result = await listPortfolioOrigins({
+    pool,
+    usuario: {
+      id: 1,
+      empresa_id: 7,
+      rol: ROLES.SUPER_ADMIN
+    }
+  })
+
+  assert.equal(result.length, 1)
+  assert.deepEqual(pool.calls[0].values, [7])
+  assert.match(
+    pool.calls[0].text,
+    /o\.empresa_id = \$1/
+  )
+  assert.doesNotMatch(
+    pool.calls[0].text,
+    /referencia_secreto|configuracion_no_secreta/
   )
 })

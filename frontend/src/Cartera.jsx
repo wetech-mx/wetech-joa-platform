@@ -16,6 +16,7 @@ import {
 
 const EMPTY_FILTERS = {
   busqueda: '',
+  origen: '',
   campania: '',
   ejecutivo: '',
   estado: '',
@@ -108,6 +109,7 @@ export default function Cartera({
     totalPages: 0
   })
   const [executives, setExecutives] = useState([])
+  const [origins, setOrigins] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -115,6 +117,10 @@ export default function Cartera({
 
   const isExecutive =
     usuario?.rol === 'Ejecutivo'
+
+  const selectedOrigin = origins.find(
+    item => String(item.id) === String(filters.origen)
+  )
 
   const loadPortfolio = useCallback(async signal => {
     setLoading(true)
@@ -171,6 +177,32 @@ export default function Cartera({
     loadPortfolio,
     refreshVersion
   ])
+
+  useEffect(() => {
+    let active = true
+
+    apiFetch('/crm-api/cartera/origenes')
+      .then(response => readJson(
+        response,
+        'No fue posible consultar los orígenes'
+      ))
+      .then(data => {
+        if (active && Array.isArray(data)) {
+          setOrigins(data)
+        }
+      })
+      .catch(requestError => {
+        if (active) {
+          setError(current => (
+            current || requestError.message
+          ))
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     if (isExecutive) {
@@ -240,7 +272,9 @@ export default function Cartera({
             MÓDULO V0.7.0
           </p>
           <h1 className="mt-1 text-4xl font-bold">
-            Cartera Banco Azteca
+            {selectedOrigin
+              ? `Cartera · ${selectedOrigin.nombre}`
+              : 'Cartera'}
           </h1>
           <p className="mt-2 text-gray-500">
             Consulta, filtra y gestiona las cuentas asignadas.
@@ -262,6 +296,26 @@ export default function Cartera({
         className="mt-8 rounded-3xl bg-white p-6 shadow"
       >
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <label className="text-sm font-bold">
+            Origen
+            <select
+              name="origen"
+              value={draftFilters.origen}
+              onChange={updateDraft}
+              className="mt-2 w-full rounded-xl border bg-white p-3 font-normal"
+            >
+              <option value="">Todos los orígenes</option>
+              {origins.map(item => (
+                <option
+                  key={item.id}
+                  value={item.id}
+                >
+                  {item.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label className="text-sm font-bold">
             Búsqueda
             <input
@@ -414,17 +468,19 @@ export default function Cartera({
             </h3>
             <p className="mt-2 text-gray-500">
               La cartera aparecerá aquí cuando exista una importación
-              o cuando los filtros encuentren resultados.
+              para el origen seleccionado o cuando los filtros
+              encuentren resultados.
             </p>
           </div>
         )}
 
         {rows.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="min-w-[1180px] w-full text-sm">
+            <table className="min-w-[1280px] w-full text-sm">
               <thead className="bg-gray-50 text-left">
                 <tr>
                   <th className="p-4">Cliente</th>
+                  <th className="p-4">Origen</th>
                   <th className="p-4">Campaña / folio</th>
                   <th className="p-4">Riesgo</th>
                   <th className="p-4">Atraso</th>
@@ -448,6 +504,14 @@ export default function Cartera({
                       </p>
                       <p className="text-xs text-gray-500">
                         ID cliente: {row.id_cliente}
+                      </p>
+                    </td>
+                    <td className="p-4">
+                      <p className="font-semibold">
+                        {row.origen_nombre || 'Sin origen'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {row.origen_codigo || '—'}
                       </p>
                     </td>
                     <td className="p-4">

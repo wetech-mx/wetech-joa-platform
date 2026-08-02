@@ -25,6 +25,10 @@ test('expone el resumen dentro de rutas protegidas de cartera', () => {
     routes,
     /'\/cartera\/resumen',\s*obtenerResumenCartera/
   )
+  assert.match(
+    routes,
+    /'\/cartera\/origenes',\s*obtenerOrigenesCartera/
+  )
 })
 
 test('el Dashboard consulta el resumen con el cliente autenticado', () => {
@@ -34,11 +38,32 @@ test('el Dashboard consulta el resumen con el cliente autenticado', () => {
 
   assert.match(
     dashboard,
-    /apiFetch\('\/crm-api\/cartera\/resumen'/
+    /apiFetch\(endpoint,/
+  )
+  assert.match(
+    dashboard,
+    /apiFetch\('\/crm-api\/cartera\/origenes'/
   )
   assert.doesNotMatch(
     dashboard,
     /localStorage\.getItem\('token'\)/
+  )
+})
+
+test('Cartera permite filtrar y mostrar el origen', () => {
+  const cartera = read('frontend/src/Cartera.jsx')
+
+  assert.match(
+    cartera,
+    /name="origen"/
+  )
+  assert.match(
+    cartera,
+    /row\.origen_nombre/
+  )
+  assert.doesNotMatch(
+    cartera,
+    /Cartera Banco Azteca/
   )
 })
 

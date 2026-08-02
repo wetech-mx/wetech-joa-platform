@@ -5,6 +5,7 @@ const {
   getPortfolioAccount,
   getPortfolioSummary,
   listPortfolioExecutives,
+  listPortfolioOrigins,
   listPortfolio
 } = require('../repositories/cartera-read-repository')
 
@@ -87,6 +88,23 @@ async function obtenerResumenCartera(
 ) {
   try {
     const result = await getPortfolioSummary({
+      pool,
+      usuario: req.usuario,
+      query: req.query
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function obtenerOrigenesCartera(
+  req,
+  res
+) {
+  try {
+    const result = await listPortfolioOrigins({
       pool,
       usuario: req.usuario
     })
@@ -175,6 +193,7 @@ module.exports = {
   obtenerCartera,
   obtenerCuentaCartera,
   obtenerEjecutivosCartera,
+  obtenerOrigenesCartera,
   obtenerResumenCartera,
   reasignarCuentaCartera,
   respondWithError

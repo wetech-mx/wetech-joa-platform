@@ -6,6 +6,7 @@ const {
   obtenerCartera,
   obtenerCuentaCartera,
   obtenerEjecutivosCartera,
+  obtenerOrigenesCartera,
   obtenerResumenCartera,
   reasignarCuentaCartera
 } = require('../controllers/cartera.controller')
@@ -31,6 +32,11 @@ router.get(
 router.get(
   '/cartera/ejecutivos',
   obtenerEjecutivosCartera
+)
+
+router.get(
+  '/cartera/origenes',
+  obtenerOrigenesCartera
 )
 
 router.get(
