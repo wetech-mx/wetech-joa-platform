@@ -8,16 +8,33 @@ async function login(req, res) {
 
   const { email, password } = req.body
 
+  if (
+    typeof email !== 'string'
+    || typeof password !== 'string'
+    || !email.trim()
+    || !password
+  ) {
+    return res.status(400).json({
+      error: 'Correo y contraseña son obligatorios'
+    })
+  }
+
   try {
 
     const result = await pool.query(
-      'SELECT * FROM usuarios WHERE email = $1',
-      [email]
+      `
+      SELECT *
+      FROM public.usuarios
+      WHERE
+        LOWER(email) = LOWER($1)
+        AND activo = TRUE
+      `,
+      [email.trim()]
     )
 
     if (result.rows.length === 0) {
       return res.status(401).json({
-        error: 'Usuario no encontrado'
+        error: 'Credenciales inválidas'
       })
     }
 
@@ -30,7 +47,7 @@ async function login(req, res) {
 
     if (!valido) {
       return res.status(401).json({
-        error: 'Contraseña incorrecta'
+        error: 'Credenciales inválidas'
       })
     }
 

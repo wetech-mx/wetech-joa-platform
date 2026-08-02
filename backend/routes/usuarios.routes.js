@@ -11,12 +11,14 @@ const {
 
 const {
   verificaToken,
-  requiereAdmin
+  requiereAdmin,
+  requiereEmpresa
 } = require('../middleware/auth')
 
 router.get(
   '/usuarios',
   verificaToken,
+  requiereEmpresa,
   requiereAdmin,
   obtenerUsuarios
 )
@@ -24,6 +26,7 @@ router.get(
 router.post(
   '/usuarios',
   verificaToken,
+  requiereEmpresa,
   requiereAdmin,
   crearUsuario
 )
@@ -31,6 +34,7 @@ router.post(
 router.put(
   '/usuarios/:id',
   verificaToken,
+  requiereEmpresa,
   requiereAdmin,
   editarUsuario
 )
@@ -38,6 +42,7 @@ router.put(
 router.delete(
   '/usuarios/:id',
   verificaToken,
+  requiereEmpresa,
   requiereAdmin,
   eliminarUsuario
 )

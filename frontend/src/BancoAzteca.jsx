@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiFetch } from './api'
 
 function localDate() {
   const now = new Date()
@@ -22,16 +23,10 @@ export default function BancoAzteca() {
   const [downloading, setDownloading] = useState(false)
   const [message, setMessage] = useState('')
 
-  const token = localStorage.getItem('token')
-
   useEffect(() => {
     let active = true
 
-    fetch('/crm-api/banco-azteca/estado', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+    apiFetch('/crm-api/banco-azteca/estado')
       .then(async response => {
         const data = await response.json()
         if (!response.ok) {
@@ -62,7 +57,7 @@ export default function BancoAzteca() {
     return () => {
       active = false
     }
-  }, [token])
+  }, [])
 
   const descargar = async event => {
     event.preventDefault()
@@ -70,12 +65,11 @@ export default function BancoAzteca() {
     setMessage('')
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         '/crm-api/banco-azteca/exportar',
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ fecha })

@@ -8,6 +8,7 @@ const ESTADOS_LEAD = Object.freeze({
   NUEVO: 'Nuevo',
   CONTACTADO: 'Contactado',
   SEGUIMIENTO: 'Seguimiento',
+  PROPUESTA_ENVIADA: 'Propuesta enviada',
   GANADO: 'Ganado',
   PERDIDO: 'Perdido'
 })
@@ -38,4 +39,3 @@ module.exports = {
   PRIORIDADES,
   CARTERA_ESTADOS
 }
-

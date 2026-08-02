@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiFetch } from './api'
 
-export default function Usuarios() {
+export default function Usuarios({ usuarioActual }) {
 
 const [mostrarModal, setMostrarModal] = useState(false)
 
@@ -16,7 +16,19 @@ const [nuevoUsuario, setNuevoUsuario] = useState({
   rol: 'Ejecutivo'
 })
   const [usuarios, setUsuarios] = useState([])
-  const [errorCarga, setErrorCarga] = useState('')
+const [errorCarga, setErrorCarga] = useState('')
+
+const abrirNuevoUsuario = () => {
+  setModoEdicion(false)
+  setUsuarioEditando(null)
+  setNuevoUsuario({
+    nombre: '',
+    email: '',
+    password: '',
+    rol: 'Ejecutivo'
+  })
+  setMostrarModal(true)
+}
 
   const obtenerUsuarios = async () => {
 
@@ -137,8 +149,6 @@ const guardarUsuario = async () => {
 
 const editarUsuario = (usuario) => {
 
-  console.log('EDITANDO:', usuario)
-
   setModoEdicion(true)
 
   setUsuarioEditando(usuario)
@@ -156,8 +166,8 @@ const editarUsuario = (usuario) => {
 
 const eliminarUsuario = async (id) => {
 
-if(id === 1){
-    alert('No puedes eliminar el administrador principal')
+  if (id === usuarioActual?.id) {
+    alert('No puedes desactivar tu propia cuenta')
     return
   }
 
@@ -211,7 +221,7 @@ if(id === 1){
         </h2>
 
         <button
-  onClick={() => setMostrarModal(true)}
+  onClick={abrirNuevoUsuario}
   className="
     bg-blue-600
     hover:bg-blue-700
@@ -269,6 +279,7 @@ if(id === 1){
 
 <button
   onClick={() => editarUsuario(usuario)}
+  disabled={usuario.rol === 'super_admin'}
   className="
     bg-yellow-500
     hover:bg-yellow-600
@@ -276,7 +287,7 @@ if(id === 1){
     px-3
     py-1
     rounded-lg
-    transition
+    transition disabled:opacity-40 disabled:cursor-not-allowed
   "
 >
   ✏️ Editar
@@ -284,6 +295,10 @@ if(id === 1){
 
 <button
   onClick={() => eliminarUsuario(usuario.id)}
+  disabled={
+    usuario.rol === 'super_admin'
+    || usuario.id === usuarioActual?.id
+  }
   className="
     bg-red-600
     hover:bg-red-700
@@ -292,7 +307,7 @@ if(id === 1){
     py-2
     rounded-lg
     transition
-    ml-2
+    ml-2 disabled:opacity-40 disabled:cursor-not-allowed
   "
 >
   🗑 Eliminar
@@ -361,17 +376,21 @@ animate-fadeIn
   }
 />
 
-<input
-  type="password"
-  placeholder="Contraseña"
-  className="w-full border p-3 mb-3 rounded"
-  onChange={(e)=>
-    setNuevoUsuario({
-      ...nuevoUsuario,
-      password:e.target.value
-    })
-  }
-/>
+{!modoEdicion && (
+  <input
+    type="password"
+    minLength="10"
+    maxLength="128"
+    placeholder="Contraseña (mínimo 10 caracteres)"
+    className="w-full border p-3 mb-3 rounded"
+    onChange={(e)=>
+      setNuevoUsuario({
+        ...nuevoUsuario,
+        password:e.target.value
+      })
+    }
+  />
+)}
 
 <select
   className="w-full border p-3 mb-6 rounded"
@@ -385,7 +404,6 @@ animate-fadeIn
 >
 
 <option>Administrador</option>
-<option>Supervisor</option>
 <option>Ejecutivo</option>
 
 </select>

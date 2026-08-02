@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiFetch } from './api'
 export default function LeadDrawer({
   lead,
   onClose
@@ -10,9 +11,19 @@ useEffect(() => {
 
   if (!lead) return
 
-  fetch(`/crm-api/leads/${lead.id}/historial`)
-    .then(res => res.json())
-    .then(data => setHistorial(data))
+  apiFetch(`/crm-api/leads/${lead.id}/historial`)
+    .then(async response => {
+      const data = await response.json().catch(() => [])
+
+      if (!response.ok) {
+        throw new Error('No fue posible consultar el historial')
+      }
+
+      return data
+    })
+    .then(data => setHistorial(
+      Array.isArray(data) ? data : []
+    ))
     .catch(console.error)
 
 }, [lead])

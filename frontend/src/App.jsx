@@ -67,7 +67,7 @@ const actualizarEstado = async (id, nuevoEstado) => {
 
   try {
 
-    await fetch(`/crm-api/leads/${id}/estado`, {
+    const response = await apiFetch(`/crm-api/leads/${id}/estado`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json"
@@ -77,8 +77,12 @@ const actualizarEstado = async (id, nuevoEstado) => {
       })
     })
 
+    if (!response.ok) {
+      throw new Error('No fue posible actualizar el estado')
+    }
+
     setLeads(
-      leads.map((lead) =>
+      current => current.map((lead) =>
         lead.id === id
           ? { ...lead, estado: nuevoEstado }
           : lead
@@ -97,7 +101,7 @@ const actualizarFecha = async (id, fecha) => {
 
   try {
 
-    await fetch(`/crm-api/leads/${id}/fecha`, {
+    const response = await apiFetch(`/crm-api/leads/${id}/fecha`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
@@ -107,8 +111,12 @@ const actualizarFecha = async (id, fecha) => {
       })
     })
 
+    if (!response.ok) {
+      throw new Error('No fue posible actualizar la fecha')
+    }
+
     setLeads(
-      leads.map((lead) =>
+      current => current.map((lead) =>
         lead.id === id
           ? { ...lead, proximo_contacto: fecha }
           : lead
@@ -135,7 +143,7 @@ const importarLeads = async (e) => {
 
   try {
 
-    const res = await fetch(
+    const res = await apiFetch(
       '/crm-api/importar-leads',
       {
         method: 'POST',
@@ -143,7 +151,13 @@ const importarLeads = async (e) => {
       }
     )
 
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      throw new Error(
+        data.error || 'No fue posible importar el archivo'
+      )
+    }
 
     alert(
       `${data.importados} leads importados`
@@ -165,7 +179,7 @@ const asignarLead = async (id, usuario_id) => {
 
   try {
 
-    await fetch(`/crm-api/leads/${id}/asignar`, {
+    const response = await apiFetch(`/crm-api/leads/${id}/asignar`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
@@ -175,8 +189,12 @@ const asignarLead = async (id, usuario_id) => {
       })
     })
 
+    if (!response.ok) {
+      throw new Error('No fue posible asignar el lead')
+    }
+
     setLeads(
-      leads.map((lead) =>
+      current => current.map((lead) =>
         lead.id === id
           ? { ...lead, usuario_id }
           : lead
@@ -195,7 +213,7 @@ const actualizarNotas = async (id, notas) => {
 
   try {
 
-    await fetch(`/crm-api/leads/${id}/notas`, {
+    const response = await apiFetch(`/crm-api/leads/${id}/notas`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json'
@@ -205,8 +223,12 @@ const actualizarNotas = async (id, notas) => {
       })
     })
 
+    if (!response.ok) {
+      throw new Error('No fue posible actualizar las notas')
+    }
+
     setLeads(
-      leads.map((lead) =>
+      current => current.map((lead) =>
         lead.id === id
           ? { ...lead, notas }
           : lead
@@ -446,7 +468,7 @@ if (!usuario) {
       <main className="min-w-0 flex-1 p-10">
 
 {pantalla === 'usuarios' && (
-  <Usuarios />
+  <Usuarios usuarioActual={usuario} />
 )}
 
 {pantalla === 'banco-azteca' && (
@@ -495,19 +517,20 @@ if (!usuario) {
     📇 Tarjetas
   </button>
 
-<label
-  className="px-4 py-2 rounded bg-green-600 text-white cursor-pointer"
->
-  📥 Importar Leads
+{usuario?.rol !== 'Ejecutivo' && (
+  <label
+    className="px-4 py-2 rounded bg-green-600 text-white cursor-pointer"
+  >
+    📥 Importar Leads
 
-  <input
-    type="file"
-    accept=".xlsx,.xls"
-    onChange={importarLeads}
-    className="hidden"
-  />
-
-</label>
+    <input
+      type="file"
+      accept=".xlsx,.xls"
+      onChange={importarLeads}
+      className="hidden"
+    />
+  </label>
+)}
 
 </div>
 

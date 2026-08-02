@@ -7,13 +7,17 @@ function verificaToken(req, res, next) {
 
   const authHeader = req.headers.authorization
 
-  if (!authHeader) {
+  const match = typeof authHeader === 'string'
+    ? authHeader.match(/^Bearer\s+([^\s]+)$/i)
+    : null
+
+  if (!match) {
     return res.status(401).json({
       error: 'Token requerido'
     })
   }
 
-  const token = authHeader.split(' ')[1]
+  const token = match[1]
 
   try {
 
@@ -38,11 +42,18 @@ function verificaToken(req, res, next) {
 
 function requiereEmpresa(req, res, next) {
 
-  if (!req.usuario.empresa_id) {
+  const companyId = Number(req.usuario?.empresa_id)
+
+  if (
+    !Number.isSafeInteger(companyId)
+    || companyId <= 0
+  ) {
     return res.status(403).json({
       error: 'Empresa no válida'
     })
   }
+
+  req.usuario.empresa_id = companyId
 
   next()
 
