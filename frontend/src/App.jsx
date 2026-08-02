@@ -19,7 +19,7 @@ const [usuario, setUsuario] = useState(
   JSON.parse(localStorage.getItem('usuario'))
 )
 
-const [pantalla, setPantalla] = useState('leads')
+const [pantalla, setPantalla] = useState('dashboard')
 
 const [vista, setVista] = useState('tabla')
 
@@ -416,7 +416,7 @@ if (!usuario) {
   </button>
 )}
           <button
-            onClick={() => setPantalla('leads')}
+            onClick={() => setPantalla('dashboard')}
             className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition"
                >
            Dashboard
@@ -479,9 +479,10 @@ if (!usuario) {
   <Cartera usuario={usuario} />
 )}
 
-{pantalla === 'leads' && (
+{(pantalla === 'dashboard' || pantalla === 'leads') && (
   <>
 
+{pantalla === 'leads' && (
 <div className="flex gap-2 mb-6">
 
   <button
@@ -533,13 +534,16 @@ if (!usuario) {
 )}
 
 </div>
+)}
 
         <div className="flex justify-between items-center mb-6">
 
   <div>
 
     <h1 className="text-5xl font-bold">
-      Rosas y Asociados CRM
+      {pantalla === 'dashboard'
+        ? 'Dashboard'
+        : 'Leads'}
     </h1>
 
     <p className="text-gray-500">
@@ -563,6 +567,8 @@ if (!usuario) {
   </button>
 </div>
 
+{pantalla === 'leads' && (
+<>
 <input
   type="text"
   placeholder="🔍 Buscar lead..."
@@ -598,7 +604,11 @@ if (!usuario) {
   </select>
 
 </div>
+</>
+)}
 
+{pantalla === 'dashboard' && (
+<>
 {alertasVisibles.vencidos.length > 0 && (
   <div className="bg-red-100 border-l-4 border-red-500 p-4 mb-6 rounded">
     <h3 className="font-bold text-red-700">
@@ -661,8 +671,12 @@ if (!usuario) {
 </div>
  
 </div>
+</>
+)}
 
 
+{pantalla === 'leads' && (
+<>
 {vista === 'tabla' && (
 
         <div className="bg-white rounded-3xl p-8 shadow">
@@ -850,6 +864,8 @@ if (!usuario) {
   onCambiarEstado={actualizarEstado}
 />
 
+)}
+</>
 )}
         </>
 )}  

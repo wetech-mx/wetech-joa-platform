@@ -66,3 +66,28 @@ test('frontend usa el cliente autenticado en rutas protegidas', () => {
   assert.match(drawer, /apiFetch\(/)
   assert.doesNotMatch(bank, /localStorage\.getItem\('token'\)/)
 })
+
+test('Dashboard Leads y Cartera usan pantallas independientes', () => {
+  const app = read('../frontend/src/App.jsx')
+
+  assert.match(
+    app,
+    /useState\('dashboard'\)/
+  )
+  assert.match(
+    app,
+    /setPantalla\('dashboard'\)/
+  )
+  assert.match(
+    app,
+    /setPantalla\('leads'\)/
+  )
+  assert.match(
+    app,
+    /setPantalla\('cartera'\)/
+  )
+  assert.match(
+    app,
+    /pantalla === 'dashboard'[\s\S]*pantalla === 'leads'/
+  )
+})
