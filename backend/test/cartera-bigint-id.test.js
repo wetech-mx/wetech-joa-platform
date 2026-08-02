@@ -28,6 +28,7 @@ test(
       () => validateAssignmentInput({
         client,
         empresaId: 1,
+        origenId: '10',
         cuentaId: '9007199254740993',
         idCampania: 'CAMP-1'
       })
@@ -47,6 +48,7 @@ test(
       () => validateAssignmentInput({
         client,
         empresaId: 1,
+        origenId: 10,
         cuentaId: 101,
         idCampania: 'CAMP-1'
       })

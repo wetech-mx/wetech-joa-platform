@@ -8,6 +8,9 @@ const {
   validatePersistenceInput
 } = require('../importers/cartera-repository')
 
+const ORIGIN_ID = 8
+const INTEGRATION_ID = 9
+
 function portfolio(records = [
   {
     identity: {
@@ -89,7 +92,7 @@ function fakePool({
       }
 
       if (
-        compact.includes('archivo_sha256 = $2')
+        compact.includes('archivo_sha256 = $3')
         && compact.includes('FOR UPDATE')
       ) {
         return {
@@ -101,7 +104,7 @@ function fakePool({
 
       if (
         compact.includes("estado = 'completada'")
-        && compact.includes('fecha_cartera = $2')
+        && compact.includes('fecha_cartera = $3')
       ) {
         return {
           rows: completedByDate
@@ -238,6 +241,8 @@ test('rechaza parámetros de persistencia incompletos', () => {
     () => validatePersistenceInput({
       pool: {},
       empresaId: 1,
+      origenId: ORIGIN_ID,
+      integracionId: INTEGRATION_ID,
       portfolio: portfolio()
     }),
     error => (
@@ -257,6 +262,8 @@ test('importa una cuenta nueva en una transacción', async () => {
   const result = await persistPortfolio({
     pool: context.pool,
     empresaId: 7,
+    origenId: ORIGIN_ID,
+    integracionId: INTEGRATION_ID,
     portfolio: portfolio(),
     creadoPor: 3,
     assignFn
@@ -282,6 +289,31 @@ test('importa una cuenta nueva en una transacción', async () => {
     false
   )
   assert.equal(context.pool.failureCalls.length, 0)
+
+  const importInsert = context.calls.find(call => (
+    call.sql.startsWith(
+      'INSERT INTO public.cartera_importaciones'
+    )
+  ))
+  const accountInsert = context.calls.find(call => (
+    call.sql.startsWith(
+      'INSERT INTO public.cartera_cuentas'
+    )
+  ))
+
+  assert.deepEqual(importInsert.params.slice(0, 3), [
+    7,
+    ORIGIN_ID,
+    INTEGRATION_ID
+  ])
+  assert.deepEqual(accountInsert.params.slice(0, 2), [
+    7,
+    ORIGIN_ID
+  ])
+  assert.match(
+    accountInsert.sql,
+    /empresa_id, origen_id, id_campania/
+  )
 })
 
 test('actualiza una cuenta existente sin duplicarla', async () => {
@@ -292,6 +324,8 @@ test('actualiza una cuenta existente sin duplicarla', async () => {
   const result = await persistPortfolio({
     pool: context.pool,
     empresaId: 7,
+    origenId: ORIGIN_ID,
+    integracionId: INTEGRATION_ID,
     portfolio: portfolio(),
     assignFn: assignmentStub('kept')
   })
@@ -321,6 +355,8 @@ test('no repite una importación completada con el mismo SHA', async () => {
   const result = await persistPortfolio({
     pool: context.pool,
     empresaId: 7,
+    origenId: ORIGIN_ID,
+    integracionId: INTEGRATION_ID,
     portfolio: portfolio(),
     assignFn: assignmentStub()
   })
@@ -352,6 +388,8 @@ test('rechaza otro archivo completado para la misma fecha', async () => {
     () => persistPortfolio({
       pool: context.pool,
       empresaId: 7,
+      origenId: ORIGIN_ID,
+      integracionId: INTEGRATION_ID,
       portfolio: portfolio(),
       assignFn: assignmentStub()
     }),
@@ -369,7 +407,7 @@ test('rechaza otro archivo completado para la misma fecha', async () => {
       call.sql.startsWith(
         'INSERT INTO public.cartera_importaciones'
       )
-      && String(call.params[4]).startsWith('BAZ_')
+      && String(call.params[6]).startsWith('BAZ_')
     )).length,
     1
   )
@@ -384,6 +422,8 @@ test('hace rollback si el snapshot ya existe', async () => {
     () => persistPortfolio({
       pool: context.pool,
       empresaId: 7,
+      origenId: ORIGIN_ID,
+      integracionId: INTEGRATION_ID,
       portfolio: portfolio(),
       assignFn: assignmentStub()
     }),
@@ -405,7 +445,7 @@ test('hace rollback si el snapshot ya existe', async () => {
       call.sql.startsWith(
         'INSERT INTO public.cartera_importaciones'
       )
-      && String(call.params[4]).startsWith('BAZ_')
+      && String(call.params[6]).startsWith('BAZ_')
     )).length,
     1
   )
@@ -452,6 +492,8 @@ test('cuenta campañas distintas al cerrar la importación', async () => {
   const result = await persistPortfolio({
     pool: context.pool,
     empresaId: 7,
+    origenId: ORIGIN_ID,
+    integracionId: INTEGRATION_ID,
     portfolio: portfolio(records),
     assignFn: assignmentStub()
   })
@@ -481,6 +523,8 @@ test('no guarda mensajes internos de PostgreSQL en la auditoría', async () => {
     queryTarget,
     {
       empresaId: 7,
+      origenId: ORIGIN_ID,
+      integracionId: INTEGRATION_ID,
       portfolio: portfolio(),
       creadoPor: null,
       error: {
@@ -491,11 +535,11 @@ test('no guarda mensajes internos de PostgreSQL en la auditoría', async () => {
   )
 
   assert.equal(
-    calls[0].params[4],
+    calls[0].params[6],
     'BAZ_IMPORT_UNEXPECTED'
   )
   assert.equal(
-    calls[0].params[5],
+    calls[0].params[7],
     'Error interno durante la importación'
   )
 })
@@ -507,6 +551,8 @@ test('envía cada cuenta al round robin dentro de la importación', async () => 
   await persistPortfolio({
     pool: context.pool,
     empresaId: 7,
+    origenId: ORIGIN_ID,
+    integracionId: INTEGRATION_ID,
     portfolio: portfolio(),
     assignFn
   })
@@ -514,6 +560,7 @@ test('envía cada cuenta al round robin dentro de la importación', async () => 
   assert.equal(assignFn.calls.length, 1)
   assert.equal(assignFn.calls[0].client, context.client)
   assert.equal(assignFn.calls[0].empresaId, 7)
+  assert.equal(assignFn.calls[0].origenId, ORIGIN_ID)
   assert.equal(assignFn.calls[0].cuentaId, 101)
   assert.equal(
     assignFn.calls[0].idCampania,
@@ -541,6 +588,8 @@ test('hace rollback si falla el round robin', async () => {
     () => persistPortfolio({
       pool: context.pool,
       empresaId: 7,
+      origenId: ORIGIN_ID,
+      integracionId: INTEGRATION_ID,
       portfolio: portfolio(),
       assignFn
     }),
@@ -566,6 +615,8 @@ test('rechaza resultados desconocidos del asignador', async () => {
     () => persistPortfolio({
       pool: context.pool,
       empresaId: 7,
+      origenId: ORIGIN_ID,
+      integracionId: INTEGRATION_ID,
       portfolio: portfolio(),
       assignFn: async () => ({
         status: 'desconocido'

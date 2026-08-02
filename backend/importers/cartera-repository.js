@@ -77,9 +77,22 @@ class CarteraPersistenceError extends Error {
   }
 }
 
+function isPositiveDatabaseId(value) {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value > 0
+  }
+
+  return (
+    typeof value === 'string'
+    && /^[1-9]\d*$/.test(value)
+  )
+}
+
 function validatePersistenceInput({
   pool,
   empresaId,
+  origenId,
+  integracionId,
   portfolio
 }) {
   if (!pool || typeof pool.connect !== 'function') {
@@ -93,6 +106,20 @@ function validatePersistenceInput({
     throw new CarteraPersistenceError(
       'BAZ_PERSIST_EMPRESA_INVALID',
       'empresaId debe ser un entero positivo'
+    )
+  }
+
+  if (!isPositiveDatabaseId(origenId)) {
+    throw new CarteraPersistenceError(
+      'BAZ_PERSIST_ORIGIN_INVALID',
+      'origenId debe ser un identificador positivo'
+    )
+  }
+
+  if (!isPositiveDatabaseId(integracionId)) {
+    throw new CarteraPersistenceError(
+      'BAZ_PERSIST_INTEGRATION_INVALID',
+      'integracionId debe ser un identificador positivo'
     )
   }
 
@@ -114,6 +141,7 @@ function validatePersistenceInput({
 async function findImportByHash(
   client,
   empresaId,
+  origenId,
   sha256
 ) {
   const result = await client.query(
@@ -124,11 +152,13 @@ async function findImportByHash(
     FROM public.cartera_importaciones
     WHERE
       empresa_id = $1
-      AND archivo_sha256 = $2
+      AND origen_id = $2
+      AND archivo_sha256 = $3
     FOR UPDATE
     `,
     [
       empresaId,
+      origenId,
       sha256
     ]
   )
@@ -139,6 +169,7 @@ async function findImportByHash(
 async function findCompletedImportByDate(
   client,
   empresaId,
+  origenId,
   date
 ) {
   const result = await client.query(
@@ -149,12 +180,14 @@ async function findCompletedImportByDate(
     FROM public.cartera_importaciones
     WHERE
       empresa_id = $1
-      AND fecha_cartera = $2
+      AND origen_id = $2
+      AND fecha_cartera = $3
       AND estado = 'completada'
     FOR UPDATE
     `,
     [
       empresaId,
+      origenId,
       date
     ]
   )
@@ -166,6 +199,8 @@ async function startImport(
   client,
   {
     empresaId,
+    origenId,
+    integracionId,
     portfolio,
     creadoPor
   }
@@ -173,6 +208,7 @@ async function startImport(
   const existing = await findImportByHash(
     client,
     empresaId,
+    origenId,
     portfolio.sha256
   )
 
@@ -186,6 +222,7 @@ async function startImport(
   const completedDate = await findCompletedImportByDate(
     client,
     empresaId,
+    origenId,
     portfolio.date
   )
 
@@ -228,6 +265,8 @@ async function startImport(
     INSERT INTO public.cartera_importaciones
     (
       empresa_id,
+      origen_id,
+      integracion_id,
       fecha_cartera,
       nombre_archivo,
       archivo_sha256,
@@ -241,14 +280,18 @@ async function startImport(
       $2,
       $3,
       $4,
-      'procesando',
       $5,
+      $6,
+      'procesando',
+      $7,
       NOW()
     )
     RETURNING id
     `,
     [
       empresaId,
+      origenId,
+      integracionId,
       portfolio.date,
       portfolio.fileName,
       portfolio.sha256,
@@ -266,6 +309,7 @@ async function upsertAccount(
   client,
   {
     empresaId,
+    origenId,
     importacionId,
     date,
     identity
@@ -276,6 +320,7 @@ async function upsertAccount(
     INSERT INTO public.cartera_cuentas
     (
       empresa_id,
+      origen_id,
       id_campania,
       id_cliente,
       folio,
@@ -290,12 +335,14 @@ async function upsertAccount(
       $3,
       $4,
       $5,
-      $5,
-      $6
+      $6,
+      $6,
+      $7
     )
     ON CONFLICT
     (
       empresa_id,
+      origen_id,
       id_campania,
       id_cliente,
       folio
@@ -305,6 +352,7 @@ async function upsertAccount(
     `,
     [
       empresaId,
+      origenId,
       identity.idCampania,
       identity.idCliente,
       identity.folio,
@@ -326,28 +374,30 @@ async function upsertAccount(
     SET
       primera_fecha_cartera = LEAST(
         primera_fecha_cartera,
-        $5
+        $6
       ),
       ultima_importacion_id = CASE
-        WHEN $5 >= ultima_fecha_cartera
-          THEN $6
+        WHEN $6 >= ultima_fecha_cartera
+          THEN $7
         ELSE ultima_importacion_id
       END,
       ultima_fecha_cartera = GREATEST(
         ultima_fecha_cartera,
-        $5
+        $6
       ),
       activa = TRUE,
       actualizada_at = NOW()
     WHERE
       empresa_id = $1
-      AND id_campania = $2
-      AND id_cliente = $3
-      AND folio = $4
+      AND origen_id = $2
+      AND id_campania = $3
+      AND id_cliente = $4
+      AND folio = $5
     RETURNING id
     `,
     [
       empresaId,
+      origenId,
       identity.idCampania,
       identity.idCliente,
       identity.folio,
@@ -486,6 +536,8 @@ async function recordFailedImport(
   pool,
   {
     empresaId,
+    origenId,
+    integracionId,
     portfolio,
     creadoPor,
     error
@@ -507,6 +559,8 @@ async function recordFailedImport(
     INSERT INTO public.cartera_importaciones
     (
       empresa_id,
+      origen_id,
+      integracion_id,
       fecha_cartera,
       nombre_archivo,
       archivo_sha256,
@@ -523,16 +577,19 @@ async function recordFailedImport(
       $2,
       $3,
       $4,
-      'fallida',
       $5,
       $6,
+      'fallida',
       $7,
+      $8,
+      $9,
       NOW(),
       NOW()
     )
     ON CONFLICT
     (
       empresa_id,
+      origen_id,
       archivo_sha256
     )
     DO UPDATE SET
@@ -545,6 +602,8 @@ async function recordFailedImport(
     `,
     [
       empresaId,
+      origenId,
+      integracionId,
       portfolio.date,
       portfolio.fileName,
       portfolio.sha256,
@@ -558,6 +617,8 @@ async function recordFailedImport(
 async function persistPortfolio({
   pool,
   empresaId,
+  origenId,
+  integracionId,
   portfolio,
   creadoPor = null,
   assignFn = assignRoundRobin
@@ -565,6 +626,8 @@ async function persistPortfolio({
   validatePersistenceInput({
     pool,
     empresaId,
+    origenId,
+    integracionId,
     portfolio
   })
 
@@ -589,7 +652,7 @@ async function persistPortfolio({
       )
       `,
       [
-        `cartera:${empresaId}:${portfolio.date}`
+        `cartera:${empresaId}:${origenId}:${portfolio.date}`
       ]
     )
 
@@ -597,6 +660,8 @@ async function persistPortfolio({
       client,
       {
         empresaId,
+        origenId,
+        integracionId,
         portfolio,
         creadoPor
       }
@@ -626,6 +691,7 @@ async function persistPortfolio({
         client,
         {
           empresaId,
+          origenId,
           importacionId: importation.id,
           date: portfolio.date,
           identity: record.identity
@@ -660,6 +726,7 @@ async function persistPortfolio({
       const assignment = await assignFn({
         client,
         empresaId,
+        origenId,
         cuentaId: account.id,
         idCampania: record.identity.idCampania
       })
@@ -714,6 +781,8 @@ async function persistPortfolio({
         client,
         {
           empresaId,
+          origenId,
+          integracionId,
           portfolio,
           creadoPor,
           error
@@ -733,6 +802,7 @@ module.exports = {
   CarteraPersistenceError,
   SNAPSHOT_FIELDS,
   completeImport,
+  isPositiveDatabaseId,
   insertSnapshot,
   persistPortfolio,
   recordFailedImport,

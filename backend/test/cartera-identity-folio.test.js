@@ -125,6 +125,7 @@ test(
       client,
       {
         empresaId: 1,
+        origenId: 2,
         importacionId: 20,
         date: '2026-04-21',
         identity: {
@@ -148,6 +149,7 @@ test(
       calls[0].values,
       [
         1,
+        2,
         'CAMP-1',
         'CLIENTE-1',
         'FOLIO-1',
@@ -189,6 +191,7 @@ test(
       client,
       {
         empresaId: 1,
+        origenId: 2,
         importacionId: 20,
         date: '2026-04-21',
         identity: {
@@ -202,7 +205,7 @@ test(
     assert.equal(result.isNew, false)
     assert.match(
       calls[1].sql,
-      /AND folio = \$4/
+      /AND folio = \$5/
     )
     assert.deepEqual(
       calls[1].values,

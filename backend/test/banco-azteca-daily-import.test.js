@@ -10,6 +10,7 @@ const {
   importDailyPortfolio,
   parseChecksumDocument,
   parsePositiveInteger,
+  resolveIntegrationContext,
   resolvePortfolioDate,
   resolvePortfolioPaths
 } = require('../scripts/import-banco-azteca-daily')
@@ -47,6 +48,13 @@ function controlledPortfolio(overrides = {}) {
     ],
     totalRows: 1,
     ...overrides
+  }
+}
+
+async function controlledIntegrationContext() {
+  return {
+    origenId: '10',
+    integracionId: '20'
   }
 }
 
@@ -172,6 +180,60 @@ test('compara hashes sin filtrar diferencias de tiempo', () => {
   assert.equal(hashesMatch('invalido', HASH), false)
 })
 
+test('resuelve la integración activa dentro de la empresa', async () => {
+  const calls = []
+  const result = await resolveIntegrationContext(
+    {
+      async query(sql, params) {
+        calls.push({
+          sql: String(sql).replace(/\s+/g, ' ').trim(),
+          params
+        })
+
+        return {
+          rows: [
+            {
+              origen_id: '10',
+              integracion_id: '20'
+            }
+          ]
+        }
+      }
+    },
+    1
+  )
+
+  assert.deepEqual(result, {
+    origenId: '10',
+    integracionId: '20'
+  })
+  assert.deepEqual(calls[0].params, [
+    1,
+    'banco_azteca',
+    'banco_azteca_api'
+  ])
+  assert.match(calls[0].sql, /origen\.activo = TRUE/)
+  assert.match(calls[0].sql, /integracion\.activo = TRUE/)
+})
+
+test('rechaza una integración ausente o inactiva', async () => {
+  await assert.rejects(
+    () => resolveIntegrationContext(
+      {
+        async query() {
+          return {
+            rows: []
+          }
+        }
+      },
+      1
+    ),
+    error => (
+      error.code === 'BAZ_IMPORT_INTEGRATION_NOT_FOUND'
+    )
+  )
+})
+
 test('valida SHA-256 antes de persistir la cartera', async () => {
   let persisted = false
 
@@ -219,6 +281,7 @@ test('envía la cartera validada a persistencia', async () => {
 
       return controlledPortfolio()
     },
+    resolveContextFn: controlledIntegrationContext,
     persistFn: async input => {
       calls.push([
         'persist',
@@ -242,6 +305,8 @@ test('envía la cartera validada a persistencia', async () => {
   assert.equal(result.empresaId, 1)
   assert.equal(result.importacionId, 10)
   assert.equal(calls[2][1].empresaId, 1)
+  assert.equal(calls[2][1].origenId, '10')
+  assert.equal(calls[2][1].integracionId, '20')
   assert.equal(calls[2][1].creadoPor, null)
   assert.equal(
     calls[2][1].portfolio.sha256,
@@ -257,6 +322,7 @@ test('conserva el resultado idempotente del repositorio', async () => {
       `${HASH}  ${FILE_NAME}\n`,
     readPortfolioFn: async () =>
       controlledPortfolio(),
+    resolveContextFn: controlledIntegrationContext,
     persistFn: async () => ({
       status: 'already_imported',
       importacionId: 10,

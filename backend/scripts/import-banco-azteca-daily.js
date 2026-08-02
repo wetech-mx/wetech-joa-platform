@@ -17,6 +17,8 @@ const {
 
 const DEFAULT_TIME_ZONE = 'America/Mexico_City'
 const FILE_PREFIX = 'Cartera_BancoAzteca_'
+const ORIGIN_CODE = 'banco_azteca'
+const INTEGRATION_CODE = 'banco_azteca_api'
 
 class CarteraDailyImportError extends Error {
   constructor(code, message, details = {}) {
@@ -194,13 +196,61 @@ function hashesMatch(left, right) {
   )
 }
 
+async function resolveIntegrationContext(
+  pool,
+  empresaId
+) {
+  if (!pool || typeof pool.query !== 'function') {
+    throw new CarteraDailyImportError(
+      'BAZ_IMPORT_POOL_INVALID',
+      'La conexión PostgreSQL no es válida'
+    )
+  }
+
+  const result = await pool.query(
+    `
+    SELECT
+      origen.id::TEXT AS origen_id,
+      integracion.id::TEXT AS integracion_id
+    FROM public.crm_origenes origen
+    JOIN public.crm_integraciones integracion
+      ON integracion.empresa_id = origen.empresa_id
+      AND integracion.origen_id = origen.id
+    WHERE
+      origen.empresa_id = $1
+      AND origen.codigo = $2
+      AND origen.activo = TRUE
+      AND integracion.codigo = $3
+      AND integracion.activo = TRUE
+    `,
+    [
+      empresaId,
+      ORIGIN_CODE,
+      INTEGRATION_CODE
+    ]
+  )
+
+  if (result.rows.length !== 1) {
+    throw new CarteraDailyImportError(
+      'BAZ_IMPORT_INTEGRATION_NOT_FOUND',
+      'La integración activa de Banco Azteca no está disponible'
+    )
+  }
+
+  return {
+    origenId: result.rows[0].origen_id,
+    integracionId: result.rows[0].integracion_id
+  }
+}
+
 async function importDailyPortfolio({
   env = process.env,
   now = new Date(),
   pool,
   readFileFn = fs.promises.readFile,
   readPortfolioFn = readPortfolioWorkbook,
-  persistFn = persistPortfolio
+  persistFn = persistPortfolio,
+  resolveContextFn = resolveIntegrationContext
 } = {}) {
   const empresaId = parsePositiveInteger(
     env.BAZ_IMPORT_EMPRESA_ID,
@@ -285,9 +335,16 @@ async function importDailyPortfolio({
     )
   }
 
+  const context = await resolveContextFn(
+    pool,
+    empresaId
+  )
+
   const result = await persistFn({
     pool,
     empresaId,
+    origenId: context.origenId,
+    integracionId: context.integracionId,
     portfolio,
     creadoPor
   })
@@ -297,7 +354,9 @@ async function importDailyPortfolio({
     date: paths.date,
     fileName: paths.fileName,
     sha256: portfolio.sha256,
-    empresaId
+    empresaId,
+    origenId: context.origenId,
+    integracionId: context.integracionId
   }
 }
 
@@ -346,6 +405,7 @@ module.exports = {
   importDailyPortfolio,
   parseChecksumDocument,
   parsePositiveInteger,
+  resolveIntegrationContext,
   resolvePortfolioDate,
   resolvePortfolioPaths,
   validateIsoDate

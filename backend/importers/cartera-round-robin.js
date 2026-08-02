@@ -25,6 +25,7 @@ function isPositiveDatabaseId(value) {
 function validateAssignmentInput({
   client,
   empresaId,
+  origenId,
   cuentaId,
   idCampania
 }) {
@@ -39,6 +40,13 @@ function validateAssignmentInput({
     throw new CarteraAssignmentError(
       'BAZ_ASSIGN_EMPRESA_INVALID',
       'empresaId debe ser un entero positivo'
+    )
+  }
+
+  if (!isPositiveDatabaseId(origenId)) {
+    throw new CarteraAssignmentError(
+      'BAZ_ASSIGN_ORIGIN_INVALID',
+      'origenId debe ser un identificador positivo'
     )
   }
 
@@ -90,7 +98,8 @@ function chooseNextExecutive(
 async function lockAccount(
   client,
   cuentaId,
-  empresaId
+  empresaId,
+  origenId
 ) {
   const result = await client.query(
     `
@@ -99,11 +108,13 @@ async function lockAccount(
     WHERE
       id = $1
       AND empresa_id = $2
+      AND origen_id = $3
     FOR UPDATE
     `,
     [
       cuentaId,
-      empresaId
+      empresaId,
+      origenId
     ]
   )
 
@@ -164,6 +175,7 @@ async function listActiveExecutives(
 async function lockRoundRobinState(
   client,
   empresaId,
+  origenId,
   idCampania
 ) {
   await client.query(
@@ -171,22 +183,26 @@ async function lockRoundRobinState(
     INSERT INTO public.cartera_round_robin_estado
     (
       empresa_id,
+      origen_id,
       id_campania
     )
     VALUES
     (
       $1,
-      $2
+      $2,
+      $3
     )
     ON CONFLICT
     (
       empresa_id,
+      origen_id,
       id_campania
     )
     DO NOTHING
     `,
     [
       empresaId,
+      origenId,
       idCampania
     ]
   )
@@ -197,11 +213,13 @@ async function lockRoundRobinState(
     FROM public.cartera_round_robin_estado
     WHERE
       empresa_id = $1
-      AND id_campania = $2
+      AND origen_id = $2
+      AND id_campania = $3
     FOR UPDATE
     `,
     [
       empresaId,
+      origenId,
       idCampania
     ]
   )
@@ -261,6 +279,7 @@ async function updateRoundRobinState(
   client,
   {
     empresaId,
+    origenId,
     idCampania,
     usuarioId
   }
@@ -269,14 +288,16 @@ async function updateRoundRobinState(
     `
     UPDATE public.cartera_round_robin_estado
     SET
-      ultimo_usuario_id = $3,
+      ultimo_usuario_id = $4,
       actualizada_at = NOW()
     WHERE
       empresa_id = $1
-      AND id_campania = $2
+      AND origen_id = $2
+      AND id_campania = $3
     `,
     [
       empresaId,
+      origenId,
       idCampania,
       usuarioId
     ]
@@ -323,12 +344,14 @@ async function registerAssignmentHistory(
 async function assignRoundRobin({
   client,
   empresaId,
+  origenId,
   cuentaId,
   idCampania
 }) {
   validateAssignmentInput({
     client,
     empresaId,
+    origenId,
     cuentaId,
     idCampania
   })
@@ -338,7 +361,8 @@ async function assignRoundRobin({
   await lockAccount(
     client,
     cuentaId,
-    empresaId
+    empresaId,
+    origenId
   )
 
   const existing = await findActiveAssignment(
@@ -366,6 +390,7 @@ async function assignRoundRobin({
   const lastExecutiveId = await lockRoundRobinState(
     client,
     empresaId,
+    origenId,
     normalizedCampaign
   )
   const usuarioId = chooseNextExecutive(
@@ -384,6 +409,7 @@ async function assignRoundRobin({
     client,
     {
       empresaId,
+      origenId,
       idCampania: normalizedCampaign,
       usuarioId
     }

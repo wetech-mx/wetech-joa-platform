@@ -7,6 +7,8 @@ const {
   chooseNextExecutive
 } = require('../importers/cartera-round-robin')
 
+const ORIGIN_ID = 8
+
 function fakeClient({
   accountExists = true,
   existingAssignment = null,
@@ -158,6 +160,7 @@ test('conserva una asignación activa existente', async () => {
   const result = await assignRoundRobin({
     client,
     empresaId: 7,
+    origenId: ORIGIN_ID,
     cuentaId: 100,
     idCampania: 'CAMP-1'
   })
@@ -184,6 +187,7 @@ test('asigna y actualiza el cursor de campaña', async () => {
   const result = await assignRoundRobin({
     client,
     empresaId: 7,
+    origenId: ORIGIN_ID,
     cuentaId: 100,
     idCampania: ' CAMP-1 '
   })
@@ -198,7 +202,7 @@ test('asigna y actualiza el cursor de campaña', async () => {
       call.sql.startsWith(
         'UPDATE public.cartera_round_robin_estado'
       )
-      && call.params[2] === 20
+      && call.params[3] === 20
     )),
     true
   )
@@ -218,6 +222,7 @@ test('filtra por empresa, activo y rol Ejecutivo', async () => {
   await assignRoundRobin({
     client,
     empresaId: 7,
+    origenId: ORIGIN_ID,
     cuentaId: 100,
     idCampania: 'CAMP-1'
   })
@@ -243,6 +248,7 @@ test('bloquea cuenta y cursor antes de asignar', async () => {
   await assignRoundRobin({
     client,
     empresaId: 7,
+    origenId: ORIGIN_ID,
     cuentaId: 100,
     idCampania: 'CAMP-1'
   })
@@ -275,8 +281,25 @@ test('bloquea cuenta y cursor antes de asignar', async () => {
     client.calls[accountLockIndex].params,
     [
       100,
-      7
+      7,
+      ORIGIN_ID
     ]
+  )
+
+  const stateInsert = client.calls.find(call => (
+    call.sql.startsWith(
+      'INSERT INTO public.cartera_round_robin_estado'
+    )
+  ))
+
+  assert.deepEqual(stateInsert.params, [
+    7,
+    ORIGIN_ID,
+    'CAMP-1'
+  ])
+  assert.match(
+    stateInsert.sql,
+    /empresa_id, origen_id, id_campania/
   )
 })
 
@@ -289,6 +312,7 @@ test('rechaza una cuenta inexistente', async () => {
     () => assignRoundRobin({
       client,
       empresaId: 7,
+      origenId: ORIGIN_ID,
       cuentaId: 999,
       idCampania: 'CAMP-1'
     }),
