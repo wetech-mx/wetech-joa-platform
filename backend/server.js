@@ -8,6 +8,7 @@ const usuariosRoutes = require('./routes/usuarios.routes')
 const bancoAztecaRoutes = require('./routes/banco-azteca.routes')
 const carteraRoutes = require('./routes/cartera.routes')
 const leadsRoutes = require('./routes/leads.routes')
+const integrationsRoutes = require('./routes/integrations.routes')
 const {
   crearOpcionesCors
 } = require('./config/security')
@@ -28,6 +29,7 @@ app.get('/', (req, res) => {
 app.use('/api', authRoutes)
 app.use('/api', usuariosRoutes)
 app.use('/api', leadsRoutes)
+app.use('/api', integrationsRoutes)
 app.use('/api/banco-azteca', bancoAztecaRoutes)
 app.use('/api', carteraRoutes)
 
