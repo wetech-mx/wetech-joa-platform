@@ -13,6 +13,7 @@ Group=bancoexport
 WorkingDirectory=/opt/crm/backend
 Environment=NODE_ENV=production
 EnvironmentFile=-/etc/default/banco-azteca-cartera
+EnvironmentFile=-/etc/wetech-crm/integraciones/banco-azteca-runtime.env
 ExecStart=/usr/bin/node /opt/crm/backend/scripts/export-banco-azteca-daily.js
 ExecStartPost=/usr/bin/node /opt/crm/backend/scripts/import-banco-azteca-daily.js
 UMask=0027
@@ -31,6 +32,7 @@ ProtectKernelTunables=true
 ProtectSystem=strict
 ProtectHome=true
 ReadOnlyPaths=/opt/crm/backend
+ReadOnlyPaths=/etc/wetech-crm/integraciones
 ReadWritePaths=/srv/banco-azteca-transfer/outbox
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictNamespaces=true

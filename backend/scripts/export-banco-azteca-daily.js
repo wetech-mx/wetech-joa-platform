@@ -5,6 +5,12 @@ const path = require('node:path')
 const {
   exportPortfolio
 } = require('../integrations/banco-azteca/service')
+const {
+  buildBancoAztecaRuntimeEnvironment,
+  secretReferenceFrom
+} = require(
+  '../integrations/banco-azteca/runtime-environment'
+)
 
 const DEFAULT_TIME_ZONE = 'America/Mexico_City'
 const DEFAULT_OUTBOX = '/srv/banco-azteca-transfer/outbox'
@@ -216,17 +222,30 @@ async function generateDailyPortfolio({
 }
 
 async function main() {
-  const envFile = process.env.BANCO_AZTECA_ENV_FILE ||
-    path.join(__dirname, '..', '.env')
+  if (!secretReferenceFrom(process.env)) {
+    const envFile = process.env.BANCO_AZTECA_ENV_FILE ||
+      path.join(__dirname, '..', '.env')
 
-  require('dotenv').config({
-    path: envFile,
-    quiet: true
+    require('dotenv').config({
+      path: envFile,
+      quiet: true
+    })
+  }
+
+  const runtime = buildBancoAztecaRuntimeEnvironment({
+    env: process.env
   })
 
   process.umask(0o027)
 
-  const result = await generateDailyPortfolio()
+  console.log(
+    `BANCO_AZTECA_CONFIG_SOURCE=${runtime.mode}`
+  )
+  console.log('BANCO_AZTECA_SECRET_SHOWN=NO')
+
+  const result = await generateDailyPortfolio({
+    env: runtime.env
+  })
   console.log(JSON.stringify(result))
 }
 

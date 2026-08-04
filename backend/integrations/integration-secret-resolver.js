@@ -313,7 +313,8 @@ function validateRegistryEntry(
   assertAllowedKeys(entry, [
     'fuente',
     'ruta',
-    'llaves_requeridas'
+    'llaves_requeridas',
+    'llaves_permitidas'
   ])
 
   if (
@@ -341,13 +342,31 @@ function validateRegistryEntry(
     )
   }
 
+  const requiredKeys = validateRequiredKeys(
+    entry.llaves_requeridas
+  )
+  const allowedKeys = validateRequiredKeys(
+    entry.llaves_permitidas
+  )
+
+  if (
+    allowedKeys.length > 0
+    && requiredKeys.some(
+      key => !allowedKeys.includes(key)
+    )
+  ) {
+    throw resolverError(
+      'INTEGRATION_SECRET_REGISTRY_ENTRY_INVALID',
+      'Las llaves requeridas deben estar permitidas'
+    )
+  }
+
   return {
     scheme,
     source: entry.fuente,
     filePath: path.resolve(entry.ruta),
-    requiredKeys: validateRequiredKeys(
-      entry.llaves_requeridas
-    )
+    requiredKeys,
+    allowedKeys
   }
 }
 
@@ -454,7 +473,20 @@ function resolveSecretReference(
     }
   }
 
-  const configuration = dotenv.parse(content)
+  const parsedConfiguration = dotenv.parse(content)
+  const configuration = validated.allowedKeys.length > 0
+    ? Object.fromEntries(
+      validated.allowedKeys
+        .filter(key => Object.hasOwn(
+          parsedConfiguration,
+          key
+        ))
+        .map(key => [
+          key,
+          parsedConfiguration[key]
+        ])
+    )
+    : parsedConfiguration
 
   assertRequiredConfiguration(
     configuration,

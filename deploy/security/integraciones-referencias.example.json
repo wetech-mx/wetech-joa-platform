@@ -3,7 +3,25 @@
   "referencias": {
     "servidor:backend_env_banco_azteca": {
       "fuente": "archivo_env",
-      "ruta": "/etc/default/banco-azteca-cartera"
+      "ruta": "/opt/crm/backend/.env",
+      "llaves_requeridas": [
+        "BAZ_BASE_URL",
+        "BAZ_CONSUMER_KEY",
+        "BAZ_CONSUMER_SECRET",
+        "BAZ_ID_DESPACHO",
+        "BAZ_ID_ESTATUS",
+        "BAZ_ID_CANAL_ENVIO"
+      ],
+      "llaves_permitidas": [
+        "BAZ_BASE_URL",
+        "BAZ_CONSUMER_KEY",
+        "BAZ_CONSUMER_SECRET",
+        "BAZ_ID_DESPACHO",
+        "BAZ_ID_ESTATUS",
+        "BAZ_ID_CANAL_ENVIO",
+        "BAZ_TIMEOUT_MS",
+        "BAZ_MAX_PAGES"
+      ]
     }
   }
 }

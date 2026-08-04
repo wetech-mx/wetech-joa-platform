@@ -242,6 +242,67 @@ test('resuelve archivo env seguro sin transformar valores', () => {
   }
 })
 
+test('entrega únicamente llaves autorizadas del archivo env', () => {
+  const fixture = secureFixture({}, {
+    'compartido.env': [
+      'BAZ_CONSUMER_KEY=permitido',
+      'JWT_SECRET=no_debe_salir',
+      'DATABASE_URL=no_debe_salir'
+    ].join('\n')
+  })
+
+  try {
+    const filePath = path.join(
+      fixture.secretDirectory,
+      'compartido.env'
+    )
+
+    fs.writeFileSync(
+      fixture.registryPath,
+      JSON.stringify({
+        version: 1,
+        referencias: {
+          'archivo_seguro:banco_demo': {
+            fuente: 'archivo_env',
+            ruta: filePath,
+            llaves_requeridas: [
+              'BAZ_CONSUMER_KEY'
+            ],
+            llaves_permitidas: [
+              'BAZ_CONSUMER_KEY'
+            ]
+          }
+        }
+      }),
+      { mode: 0o600 }
+    )
+
+    const result = resolveSecretReference(
+      'archivo_seguro:banco_demo',
+      {
+        storeDirectory: fixture.root,
+        registryPath: fixture.registryPath,
+        secretDirectory: fixture.secretDirectory
+      }
+    )
+
+    assert.deepEqual(result.value, {
+      BAZ_CONSUMER_KEY: 'permitido'
+    })
+    assert.equal(result.fieldCount, 1)
+    assert.equal(
+      Object.hasOwn(result.value, 'JWT_SECRET'),
+      false
+    )
+    assert.equal(
+      Object.hasOwn(result.value, 'DATABASE_URL'),
+      false
+    )
+  } finally {
+    fixture.cleanup()
+  }
+})
+
 test('resuelve una referencia de entorno registrada', () => {
   const fixture = secureFixture({
     'entorno:cliente_api': {
