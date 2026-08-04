@@ -10,6 +10,7 @@ import Login from './Login'
 import BancoAzteca from './BancoAzteca'
 import Cartera from './Cartera'
 import CarteraDashboard from './CarteraDashboard'
+import Integraciones from './Integraciones'
 import { apiFetch } from './api'
 
 export default function App() {
@@ -397,6 +398,15 @@ if (!usuario) {
     <Login onLogin={setUsuario} />
   )
 }
+
+const navigationClass = screen => (
+  `block w-full rounded-xl p-3 text-left transition ${
+    pantalla === screen
+      ? 'bg-orange-500 text-white'
+      : 'hover:bg-orange-500'
+  }`
+)
+
   return (
     <div className="min-h-screen bg-gray-100 flex">
 
@@ -411,36 +421,45 @@ if (!usuario) {
             {usuario?.rol !== 'Ejecutivo' && (
   <button
     onClick={() => setPantalla('usuarios')}
-    className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition"
+    className={navigationClass('usuarios')}
   >
     Usuarios
   </button>
 )}
           <button
             onClick={() => setPantalla('dashboard')}
-            className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition"
+            className={navigationClass('dashboard')}
                >
            Dashboard
           </button>
 
           <button
             onClick={() => setPantalla('leads')}
-                    className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition"
+                    className={navigationClass('leads')}
              >
            Leads
           </button>
 
           <button
             onClick={() => setPantalla('cartera')}
-            className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition"
+            className={navigationClass('cartera')}
           >
             Cartera
           </button>
 
           {usuario?.rol !== 'Ejecutivo' && (
             <button
+              onClick={() => setPantalla('integraciones')}
+              className={navigationClass('integraciones')}
+            >
+              Integraciones
+            </button>
+          )}
+
+          {usuario?.rol !== 'Ejecutivo' && (
+            <button
               onClick={() => setPantalla('banco-azteca')}
-              className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition"
+              className={navigationClass('banco-azteca')}
             >
               Banco Azteca
             </button>
@@ -474,6 +493,10 @@ if (!usuario) {
 
 {pantalla === 'banco-azteca' && (
   <BancoAzteca />
+)}
+
+{pantalla === 'integraciones' && usuario?.rol !== 'Ejecutivo' && (
+  <Integraciones />
 )}
 
 {pantalla === 'cartera' && (
