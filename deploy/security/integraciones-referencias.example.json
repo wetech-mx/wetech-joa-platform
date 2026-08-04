@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "referencias": {
+    "servidor:backend_env_banco_azteca": {
+      "fuente": "archivo_env",
+      "ruta": "/etc/default/banco-azteca-cartera"
+    }
+  }
+}
