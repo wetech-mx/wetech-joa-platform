@@ -22,6 +22,24 @@
         "BAZ_TIMEOUT_MS",
         "BAZ_MAX_PAGES"
       ]
+    },
+    "servidor:backend_env_postgresql": {
+      "fuente": "archivo_env",
+      "ruta": "/opt/crm/backend/.env",
+      "llaves_requeridas": [
+        "DB_USER",
+        "DB_HOST",
+        "DB_NAME",
+        "DB_PASSWORD",
+        "DB_PORT"
+      ],
+      "llaves_permitidas": [
+        "DB_USER",
+        "DB_HOST",
+        "DB_NAME",
+        "DB_PASSWORD",
+        "DB_PORT"
+      ]
     }
   }
 }

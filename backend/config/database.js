@@ -1,12 +1,19 @@
 const { Pool } = require('pg')
 
+const {
+  buildDatabaseEnvironment
+} = require('./database-environment')
+
+const {
+  configuration
+} = buildDatabaseEnvironment()
+
 const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
+  user: configuration.DB_USER,
+  host: configuration.DB_HOST,
+  database: configuration.DB_NAME,
+  password: configuration.DB_PASSWORD,
+  port: configuration.DB_PORT,
 })
 
 module.exports = pool
-
