@@ -20,6 +20,13 @@ const {
   '../repositories/integration-execution-repository'
 )
 
+const {
+  IntegrationConnectionTestError,
+  testIntegrationConnection
+} = require(
+  '../integrations/integration-connection-tester'
+)
+
 function respondWithError(res, error) {
   if (error instanceof IntegrationAdminError) {
     return res.status(error.status).json({
@@ -30,6 +37,13 @@ function respondWithError(res, error) {
 
   if (error instanceof IntegrationExecutionError) {
     return res.status(400).json({
+      error: error.message,
+      code: error.code
+    })
+  }
+
+  if (error instanceof IntegrationConnectionTestError) {
+    return res.status(error.status).json({
       error: error.message,
       code: error.code
     })
@@ -69,6 +83,18 @@ async function obtenerTiposIntegracion(req, res) {
     return res.json(await listIntegrationTypes({
       pool,
       usuario: req.usuario
+    }))
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function probarConexionIntegracion(req, res) {
+  try {
+    return res.json(await testIntegrationConnection({
+      pool,
+      usuario: req.usuario,
+      integrationId: req.params.id
     }))
   } catch (error) {
     return respondWithError(res, error)
@@ -161,5 +187,6 @@ module.exports = {
   obtenerEjecuciones,
   obtenerIntegraciones,
   obtenerOrigenes,
-  obtenerTiposIntegracion
+  obtenerTiposIntegracion,
+  probarConexionIntegracion
 }

@@ -124,6 +124,22 @@ test('no envía campos de credenciales al backend', () => {
   )
 })
 
+test('ofrece prueba de conexión solo al adaptador protegido soportado', () => {
+  assert.match(
+    integrationSource,
+    /integration\.adaptador === 'banco_azteca_api'[\s\S]*integration\.activo[\s\S]*integration\.secreto_configurado/
+  )
+  assert.match(integrationSource, /Probar conexión/)
+  assert.match(
+    integrationSource,
+    /`\/crm-api\/integraciones\/\$\{integrationId\}\/probar-conexion`[\s\S]*method: 'POST'/
+  )
+  assert.doesNotMatch(
+    integrationSource,
+    /probar-conexion[\s\S]{0,300}(?:password|token|referencia_secreto)\s*:/i
+  )
+})
+
 test('los conectores nuevos quedan inactivos por defecto', () => {
   assert.match(
     integrationSource,

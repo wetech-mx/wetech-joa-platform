@@ -721,6 +721,51 @@ async function findIntegration(
   return result.rows[0]
 }
 
+async function getIntegrationConnectionTarget({
+  pool,
+  usuario,
+  integrationId
+}) {
+  const companyId = normalizeCompanyId(usuario)
+  const id = normalizeBigintId(
+    integrationId,
+    'integracion_id'
+  )
+  const result = await pool.query(
+    `
+    SELECT
+      i.id::TEXT AS id,
+      i.origen_id::TEXT AS origen_id,
+      i.codigo,
+      i.nombre,
+      i.adaptador,
+      i.activo,
+      o.activo AS origen_activo,
+      t.activo AS tipo_activo,
+      i.referencia_secreto
+    FROM public.crm_integraciones i
+    INNER JOIN public.crm_origenes o
+      ON o.empresa_id = i.empresa_id
+      AND o.id = i.origen_id
+    INNER JOIN public.crm_tipos_integracion t
+      ON t.codigo = i.tipo_codigo
+    WHERE i.empresa_id = $1
+      AND i.id = $2::BIGINT
+    `,
+    [companyId, id]
+  )
+
+  if (!result.rows[0]) {
+    throw new IntegrationAdminError(
+      'INTEGRATION_NOT_FOUND',
+      'La integración no existe dentro de la empresa',
+      404
+    )
+  }
+
+  return result.rows[0]
+}
+
 async function updateIntegration({
   pool,
   usuario,
@@ -807,6 +852,7 @@ module.exports = {
   assertSafeConfiguration,
   createIntegration,
   createOrigin,
+  getIntegrationConnectionTarget,
   listIntegrationTypes,
   listIntegrations,
   listOrigins,

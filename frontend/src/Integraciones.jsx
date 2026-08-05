@@ -272,6 +272,7 @@ export default function Integraciones() {
   const [executionStage, setExecutionStage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [testingIntegrationId, setTestingIntegrationId] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [originModal, setOriginModal] = useState(false)
@@ -547,6 +548,36 @@ export default function Integraciones() {
       tipo_codigo: typeCode,
       adaptador: DEFAULT_ADAPTERS[typeCode] || typeCode
     }))
+  }
+
+  const testConnection = async integration => {
+    const integrationId = String(integration.id)
+
+    setTestingIntegrationId(integrationId)
+    setError('')
+    setNotice('')
+
+    try {
+      const response = await apiFetch(
+        `/crm-api/integraciones/${integrationId}/probar-conexion`,
+        { method: 'POST' }
+      )
+
+      await readJson(
+        response,
+        'No fue posible completar la prueba de conexión'
+      )
+
+      setNotice(
+        `Conexión de ${integration.nombre} verificada correctamente.`
+      )
+      await loadData()
+    } catch (requestError) {
+      setError(requestError.message)
+      await loadData()
+    } finally {
+      setTestingIntegrationId('')
+    }
   }
 
   return (
@@ -827,13 +858,29 @@ export default function Integraciones() {
                     <StatusBadge active={integration.activo} />
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => openEditIntegration(integration)}
-                      className="rounded-lg bg-gray-100 px-3 py-2 font-normal text-gray-700 hover:bg-gray-200"
-                    >
-                      Editar
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      {integration.adaptador === 'banco_azteca_api'
+                        && integration.activo
+                        && integration.secreto_configurado && (
+                        <button
+                          type="button"
+                          onClick={() => testConnection(integration)}
+                          disabled={testingIntegrationId === String(integration.id)}
+                          className="rounded-lg bg-blue-50 px-3 py-2 font-normal text-blue-700 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {testingIntegrationId === String(integration.id)
+                            ? 'Probando…'
+                            : 'Probar conexión'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openEditIntegration(integration)}
+                        className="rounded-lg bg-gray-100 px-3 py-2 font-normal text-gray-700 hover:bg-gray-200"
+                      >
+                        Editar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -8,7 +8,8 @@ const {
   obtenerEjecuciones,
   obtenerIntegraciones,
   obtenerOrigenes,
-  obtenerTiposIntegracion
+  obtenerTiposIntegracion,
+  probarConexionIntegracion
 } = require('../controllers/integrations.controller')
 
 const {
@@ -63,6 +64,11 @@ router.post(
 router.patch(
   '/integraciones/:id',
   editarIntegracion
+)
+
+router.post(
+  '/integraciones/:id/probar-conexion',
+  probarConexionIntegracion
 )
 
 module.exports = router

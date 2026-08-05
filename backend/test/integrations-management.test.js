@@ -7,6 +7,7 @@ const {
   assertSafeConfiguration,
   createIntegration,
   createOrigin,
+  getIntegrationConnectionTarget,
   listIntegrations,
   listOrigins,
   normalizeBigintId,
@@ -173,6 +174,30 @@ test('lista integraciones exclusivamente por empresa y origen', async () => {
     pool.calls[0].text,
     /referencia_secreto\s+AS/
   )
+})
+
+test('resuelve objetivo técnico por empresa sin exponerlo en listados', async () => {
+  const pool = mockPool([{
+    rows: [{
+      id: '20',
+      adaptador: 'banco_azteca_api',
+      referencia_secreto: 'servidor:referencia'
+    }]
+  }])
+
+  const result = await getIntegrationConnectionTarget({
+    pool,
+    usuario: admin,
+    integrationId: '20'
+  })
+
+  assert.equal(result.id, '20')
+  assert.deepEqual(pool.calls[0].values, [7, '20'])
+  assert.match(
+    pool.calls[0].text,
+    /i\.empresa_id = \$1[\s\S]*i\.id = \$2::BIGINT/
+  )
+  assert.match(pool.calls[0].text, /i\.referencia_secreto/)
 })
 
 test('crea un origen forzando empresa de la sesión', async () => {
