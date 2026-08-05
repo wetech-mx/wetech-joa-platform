@@ -143,7 +143,7 @@ test('el exportador evita cargar dotenv en modo protegido', () => {
 
   assert.match(
     source,
-    /if \(!secretReferenceFrom\(process\.env\)\)/
+    /if \(!secretReferenceFrom\(env\)\)/
   )
   assert.match(
     source,
@@ -152,6 +152,31 @@ test('el exportador evita cargar dotenv en modo protegido', () => {
   assert.match(
     source,
     /BANCO_AZTECA_SECRET_SHOWN=NO/
+  )
+  assert.match(
+    source,
+    /stage: 'extraccion'/
+  )
+  assert.doesNotMatch(
+    source,
+    /BANCO_AZTECA_DAILY_EXPORT_ERROR'[\s\S]{0,200}message:/
+  )
+})
+
+test('la importación registra su fase sin imprimir mensajes internos', () => {
+  const importScriptPath = path.join(
+    __dirname,
+    '..',
+    'scripts',
+    'import-banco-azteca-daily.js'
+  )
+  const source = fs.readFileSync(importScriptPath, 'utf8')
+
+  assert.match(source, /stage: 'importacion'/)
+  assert.match(source, /classifyImportResult/)
+  assert.doesNotMatch(
+    source,
+    /BANCO_AZTECA_DAILY_IMPORT_ERROR'[\s\S]{0,200}message:/
   )
 })
 

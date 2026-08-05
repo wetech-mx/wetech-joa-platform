@@ -11,6 +11,13 @@ const {
 } = require(
   '../integrations/banco-azteca/runtime-environment'
 )
+const {
+  classifyExportResult,
+  monitorBancoAztecaExecution,
+  parseCompanyId
+} = require(
+  '../integrations/banco-azteca/execution-monitor'
+)
 
 const DEFAULT_TIME_ZONE = 'America/Mexico_City'
 const DEFAULT_OUTBOX = '/srv/banco-azteca-transfer/outbox'
@@ -221,9 +228,14 @@ async function generateDailyPortfolio({
   }
 }
 
-async function main() {
-  if (!secretReferenceFrom(process.env)) {
-    const envFile = process.env.BANCO_AZTECA_ENV_FILE ||
+async function runCli({
+  env = process.env,
+  pool,
+  generateFn = generateDailyPortfolio,
+  monitorFn = monitorBancoAztecaExecution
+} = {}) {
+  if (!secretReferenceFrom(env)) {
+    const envFile = env.BANCO_AZTECA_ENV_FILE ||
       path.join(__dirname, '..', '.env')
 
     require('dotenv').config({
@@ -233,8 +245,13 @@ async function main() {
   }
 
   const runtime = buildBancoAztecaRuntimeEnvironment({
-    env: process.env
+    env
   })
+  const activePool = pool || require('../config/database')
+  const ownsPool = !pool
+  const empresaId = parseCompanyId(
+    runtime.env.BAZ_IMPORT_EMPRESA_ID
+  )
 
   process.umask(0o027)
 
@@ -243,17 +260,31 @@ async function main() {
   )
   console.log('BANCO_AZTECA_SECRET_SHOWN=NO')
 
-  const result = await generateDailyPortfolio({
-    env: runtime.env
-  })
-  console.log(JSON.stringify(result))
+  try {
+    const result = await monitorFn({
+      pool: activePool,
+      empresaId,
+      stage: 'extraccion',
+      classifyResult: classifyExportResult,
+      fallbackErrorCode: 'BAZ_EXPORT_UNEXPECTED',
+      operation: () => generateFn({
+        env: runtime.env
+      })
+    })
+
+    console.log(JSON.stringify(result))
+    return result
+  } finally {
+    if (ownsPool) {
+      await activePool.end()
+    }
+  }
 }
 
 if (require.main === module) {
-  main().catch(error => {
+  runCli().catch(error => {
     console.error('BANCO_AZTECA_DAILY_EXPORT_ERROR', {
-      code: error.code || 'UNEXPECTED_ERROR',
-      message: error.message
+      code: error.code || 'BAZ_EXPORT_UNEXPECTED'
     })
     process.exitCode = 1
   })
@@ -267,5 +298,6 @@ module.exports = {
   parseHolidays,
   portfolioFileName,
   previousBusinessDay,
+  runCli,
   writeAtomic
 }

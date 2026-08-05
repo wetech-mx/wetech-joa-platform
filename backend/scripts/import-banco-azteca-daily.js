@@ -14,12 +14,16 @@ const {
   parseHolidays,
   previousBusinessDay
 } = require('./export-banco-azteca-daily')
+const {
+  classifyImportResult,
+  monitorBancoAztecaExecution,
+  resolveBancoAztecaIntegrationContext
+} = require(
+  '../integrations/banco-azteca/execution-monitor'
+)
 
 const DEFAULT_TIME_ZONE = 'America/Mexico_City'
 const FILE_PREFIX = 'Cartera_BancoAzteca_'
-const ORIGIN_CODE = 'banco_azteca'
-const INTEGRATION_CODE = 'banco_azteca_api'
-
 class CarteraDailyImportError extends Error {
   constructor(code, message, details = {}) {
     super(message)
@@ -200,47 +204,41 @@ async function resolveIntegrationContext(
   pool,
   empresaId
 ) {
-  if (!pool || typeof pool.query !== 'function') {
-    throw new CarteraDailyImportError(
-      'BAZ_IMPORT_POOL_INVALID',
-      'La conexión PostgreSQL no es válida'
+  try {
+    return await resolveBancoAztecaIntegrationContext(
+      pool,
+      empresaId
     )
+  } catch (error) {
+    if (
+      error.code === 'BAZ_EXECUTION_POOL_INVALID'
+    ) {
+      throw new CarteraDailyImportError(
+        'BAZ_IMPORT_POOL_INVALID',
+        'La conexión PostgreSQL no es válida'
+      )
+    }
+
+    if (
+      error.code
+        === 'BAZ_EXECUTION_INTEGRATION_NOT_FOUND'
+    ) {
+      throw new CarteraDailyImportError(
+        'BAZ_IMPORT_INTEGRATION_NOT_FOUND',
+        'La integración activa de Banco Azteca no está disponible'
+      )
+    }
+
+    throw error
+  }
+}
+
+function resolvedContextFunction(context) {
+  if (!context) {
+    return resolveIntegrationContext
   }
 
-  const result = await pool.query(
-    `
-    SELECT
-      origen.id::TEXT AS origen_id,
-      integracion.id::TEXT AS integracion_id
-    FROM public.crm_origenes origen
-    JOIN public.crm_integraciones integracion
-      ON integracion.empresa_id = origen.empresa_id
-      AND integracion.origen_id = origen.id
-    WHERE
-      origen.empresa_id = $1
-      AND origen.codigo = $2
-      AND origen.activo = TRUE
-      AND integracion.codigo = $3
-      AND integracion.activo = TRUE
-    `,
-    [
-      empresaId,
-      ORIGIN_CODE,
-      INTEGRATION_CODE
-    ]
-  )
-
-  if (result.rows.length !== 1) {
-    throw new CarteraDailyImportError(
-      'BAZ_IMPORT_INTEGRATION_NOT_FOUND',
-      'La integración activa de Banco Azteca no está disponible'
-    )
-  }
-
-  return {
-    origenId: result.rows[0].origen_id,
-    integracionId: result.rows[0].integracion_id
-  }
+  return async () => context
 }
 
 async function importDailyPortfolio({
@@ -360,15 +358,37 @@ async function importDailyPortfolio({
   }
 }
 
-async function runCli() {
-  require('dotenv').config()
+async function runCli({
+  env = process.env,
+  pool,
+  importFn = importDailyPortfolio,
+  monitorFn = monitorBancoAztecaExecution
+} = {}) {
+  if (env === process.env) {
+    require('dotenv').config()
+  }
 
-  const pool = require('../config/database')
+  const activePool = pool || require('../config/database')
+  const ownsPool = !pool
+  const empresaId = parsePositiveInteger(
+    env.BAZ_IMPORT_EMPRESA_ID,
+    'BAZ_IMPORT_EMPRESA_ID'
+  )
 
   try {
-    const result = await importDailyPortfolio({
-      env: process.env,
-      pool
+    const result = await monitorFn({
+      pool: activePool,
+      empresaId,
+      stage: 'importacion',
+      classifyResult: classifyImportResult,
+      fallbackErrorCode: 'BAZ_IMPORT_UNEXPECTED',
+      operation: context => importFn({
+        env,
+        pool: activePool,
+        resolveContextFn: resolvedContextFunction(
+          context
+        )
+      })
     })
 
     console.log('BANCO_AZTECA_DAILY_IMPORT_OK', {
@@ -384,19 +404,28 @@ async function runCli() {
       assignedRecords: result.assignedRecords,
       keptAssignments: result.keptAssignments
     })
+
+    return result
+  } finally {
+    if (ownsPool) {
+      await activePool.end()
+    }
+  }
+}
+
+async function main() {
+  try {
+    await runCli()
   } catch (error) {
     console.error('BANCO_AZTECA_DAILY_IMPORT_ERROR', {
-      code: error.code || 'BAZ_IMPORT_UNEXPECTED',
-      message: error.message
+      code: error.code || 'BAZ_IMPORT_UNEXPECTED'
     })
     process.exitCode = 1
-  } finally {
-    await pool.end()
   }
 }
 
 if (require.main === module) {
-  runCli()
+  main()
 }
 
 module.exports = {
@@ -408,5 +437,6 @@ module.exports = {
   resolveIntegrationContext,
   resolvePortfolioDate,
   resolvePortfolioPaths,
+  runCli,
   validateIsoDate
 }
