@@ -82,7 +82,7 @@ function StateBadge({ value }) {
         px-3
         py-1
         text-xs
-        font-bold
+        font-normal
         ${styles[value] || styles.sin_gestionar}
       `}
     >
@@ -285,7 +285,7 @@ export default function Cartera({
           <p className="text-xs font-bold uppercase text-orange-700">
             Total de cuentas
           </p>
-          <p className="text-3xl font-bold text-orange-700">
+          <p className="text-3xl font-normal text-orange-700">
             {pagination.total}
           </p>
         </div>
@@ -296,7 +296,7 @@ export default function Cartera({
         className="mt-8 rounded-3xl bg-white p-6 shadow"
       >
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <label className="text-sm font-bold">
+          <label className="text-sm font-normal">
             Origen
             <select
               name="origen"
@@ -316,7 +316,7 @@ export default function Cartera({
             </select>
           </label>
 
-          <label className="text-sm font-bold">
+          <label className="text-sm font-normal">
             Búsqueda
             <input
               name="busqueda"
@@ -328,7 +328,7 @@ export default function Cartera({
             />
           </label>
 
-          <label className="text-sm font-bold">
+          <label className="text-sm font-normal">
             Campaña
             <input
               name="campania"
@@ -339,7 +339,7 @@ export default function Cartera({
             />
           </label>
 
-          <label className="text-sm font-bold">
+          <label className="text-sm font-normal">
             Estado
             <select
               name="estado"
@@ -359,7 +359,7 @@ export default function Cartera({
             </select>
           </label>
 
-          <label className="text-sm font-bold">
+          <label className="text-sm font-normal">
             Nivel de riesgo
             <input
               name="riesgo"
@@ -370,7 +370,7 @@ export default function Cartera({
             />
           </label>
 
-          <label className="text-sm font-bold">
+          <label className="text-sm font-normal">
             Fecha de cartera
             <input
               name="fecha"
@@ -382,7 +382,7 @@ export default function Cartera({
           </label>
 
           {!isExecutive && (
-            <label className="text-sm font-bold">
+            <label className="text-sm font-normal">
               Ejecutivo
               <select
                 name="ejecutivo"
@@ -407,7 +407,7 @@ export default function Cartera({
         <div className="mt-5 flex flex-wrap gap-3">
           <button
             type="submit"
-            className="rounded-xl bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
+            className="rounded-xl bg-orange-600 px-5 py-3 font-normal text-white hover:bg-orange-700"
           >
             Aplicar filtros
           </button>
@@ -415,7 +415,7 @@ export default function Cartera({
           <button
             type="button"
             onClick={clearFilters}
-            className="rounded-xl bg-gray-200 px-5 py-3 font-bold text-gray-700 hover:bg-gray-300"
+            className="rounded-xl bg-gray-200 px-5 py-3 font-normal text-gray-700 hover:bg-gray-300"
           >
             Limpiar
           </button>
@@ -423,7 +423,7 @@ export default function Cartera({
           <button
             type="button"
             onClick={refresh}
-            className="rounded-xl border border-gray-300 px-5 py-3 font-bold text-gray-700 hover:bg-gray-50"
+            className="rounded-xl border border-gray-300 px-5 py-3 font-normal text-gray-700 hover:bg-gray-50"
           >
             Actualizar
           </button>
@@ -499,7 +499,7 @@ export default function Cartera({
                     className="hover:bg-orange-50/40"
                   >
                     <td className="p-4">
-                      <p className="font-bold">
+                      <p className="font-normal">
                         {row.nombre || 'Sin nombre'}
                       </p>
                       <p className="text-xs text-gray-500">
@@ -507,7 +507,7 @@ export default function Cartera({
                       </p>
                     </td>
                     <td className="p-4">
-                      <p className="font-semibold">
+                      <p className="font-normal">
                         {row.origen_nombre || 'Sin origen'}
                       </p>
                       <p className="text-xs text-gray-500">
@@ -531,7 +531,7 @@ export default function Cartera({
                         {row.semanas_atraso ?? '—'} semanas
                       </p>
                     </td>
-                    <td className="p-4 font-bold">
+                    <td className="p-4 font-normal">
                       {formatMoney(row.saldo)}
                     </td>
                     <td className="p-4">
@@ -549,7 +549,7 @@ export default function Cartera({
                       <button
                         type="button"
                         onClick={() => setSelectedId(row.id)}
-                        className="rounded-lg bg-gray-900 px-4 py-2 font-bold text-white hover:bg-orange-600"
+                        className="rounded-lg bg-gray-900 px-4 py-2 font-normal text-white hover:bg-orange-600"
                       >
                         Ver detalle
                       </button>
@@ -566,7 +566,7 @@ export default function Cartera({
             type="button"
             disabled={page <= 1 || loading}
             onClick={() => setPage(value => value - 1)}
-            className="rounded-lg border px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg border px-4 py-2 font-normal disabled:cursor-not-allowed disabled:opacity-40"
           >
             Anterior
           </button>
@@ -583,7 +583,7 @@ export default function Cartera({
               || page >= pagination.totalPages
             }
             onClick={() => setPage(value => value + 1)}
-            className="rounded-lg border px-4 py-2 font-bold disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg border px-4 py-2 font-normal disabled:cursor-not-allowed disabled:opacity-40"
           >
             Siguiente
           </button>

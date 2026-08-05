@@ -13,9 +13,23 @@ const {
   '../repositories/integrations-management-repository'
 )
 
+const {
+  IntegrationExecutionError,
+  listCompanyIntegrationExecutions
+} = require(
+  '../repositories/integration-execution-repository'
+)
+
 function respondWithError(res, error) {
   if (error instanceof IntegrationAdminError) {
     return res.status(error.status).json({
+      error: error.message,
+      code: error.code
+    })
+  }
+
+  if (error instanceof IntegrationExecutionError) {
+    return res.status(400).json({
       error: error.message,
       code: error.code
     })
@@ -30,6 +44,24 @@ function respondWithError(res, error) {
     error: 'Error administrando integraciones',
     code: 'INTEGRATIONS_API_INTERNAL_ERROR'
   })
+}
+
+async function obtenerEjecuciones(req, res) {
+  try {
+    return res.json(
+      await listCompanyIntegrationExecutions({
+        pool,
+        empresaId: req.usuario.empresa_id,
+        origenId: req.query.origen_id,
+        integracionId: req.query.integracion_id,
+        status: req.query.estado,
+        stage: req.query.etapa,
+        limit: req.query.limite || 50
+      })
+    )
+  } catch (error) {
+    return respondWithError(res, error)
+  }
 }
 
 async function obtenerTiposIntegracion(req, res) {
@@ -126,6 +158,7 @@ module.exports = {
   crearOrigen,
   editarIntegracion,
   editarOrigen,
+  obtenerEjecuciones,
   obtenerIntegraciones,
   obtenerOrigenes,
   obtenerTiposIntegracion

@@ -16,6 +16,11 @@ const integrationSource = fs.readFileSync(
   'utf8'
 )
 
+const indexStyles = fs.readFileSync(
+  path.join(__dirname, '../../frontend/src/index.css'),
+  'utf8'
+)
+
 test('muestra Integraciones únicamente fuera del rol Ejecutivo', () => {
   assert.match(
     appSource,
@@ -40,6 +45,53 @@ test('consulta los tres catálogos con el cliente autenticado', () => {
     integrationSource,
     /apiFetch\('\/crm-api\/integraciones'\)/
   )
+  assert.match(
+    integrationSource,
+    /apiFetch\('\/crm-api\/integraciones\/ejecuciones\?limite=100'\)/
+  )
+})
+
+test('muestra historial operativo sin campos secretos', () => {
+  assert.match(
+    integrationSource,
+    /Historial de ejecuciones/
+  )
+  assert.match(
+    integrationSource,
+    /ExecutionBadge/
+  )
+  assert.match(
+    integrationSource,
+    /error_codigo/
+  )
+  assert.doesNotMatch(
+    integrationSource,
+    /error_detalle|referencia_secreto/
+  )
+})
+
+test('aplica una distribución compacta al panel administrativo', () => {
+  assert.match(appSource, /w-56 min-h-screen/)
+  assert.match(appSource, /p-6 lg:p-8/)
+  assert.match(integrationSource, /text-\[14px\]/)
+})
+
+test('reserva la negrita para títulos y encabezados', () => {
+  assert.match(integrationSource, /integrations-page/)
+  assert.match(appSource, /crm-navigation/)
+  assert.match(
+    indexStyles,
+    /\.integrations-page \*[\s\S]*font-weight:\s*400\s*!important/
+  )
+  assert.match(
+    indexStyles,
+    /\.integrations-page thead th[\s\S]*font-weight:\s*700\s*!important/
+  )
+  assert.match(
+    indexStyles,
+    /:root[\s\S]*font-family:\s*Arial, Helvetica, sans-serif/
+  )
+  assert.match(indexStyles, /font-synthesis:\s*none/)
 })
 
 test('permite alta y edición sin borrar registros', () => {

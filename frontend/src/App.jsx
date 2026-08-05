@@ -400,7 +400,7 @@ if (!usuario) {
 }
 
 const navigationClass = screen => (
-  `block w-full rounded-xl p-3 text-left transition ${
+  `block w-full rounded-lg px-3 py-2.5 text-left text-sm font-normal transition ${
     pantalla === screen
       ? 'bg-orange-500 text-white'
       : 'hover:bg-orange-500'
@@ -408,15 +408,15 @@ const navigationClass = screen => (
 )
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="crm-app min-h-screen bg-gray-100 flex">
 
-      <aside className="w-64 min-h-screen shrink-0 bg-black text-white p-6 flex flex-col">
+      <aside className="w-56 min-h-screen shrink-0 bg-black text-white p-5 flex flex-col">
 
-        <h1 className="text-3xl font-bold text-orange-500 mb-10">
+        <h1 className="mb-7 text-2xl font-bold leading-tight text-orange-500">
           Rosas y Asociados CRM
         </h1>
 
-        <nav className="space-y-4 flex-1">
+        <nav className="crm-navigation flex-1 space-y-2">
           
             {usuario?.rol !== 'Ejecutivo' && (
   <button
@@ -465,7 +465,7 @@ const navigationClass = screen => (
             </button>
           )}
 
-          <button className="block w-full text-left p-3 rounded-xl hover:bg-orange-500 transition">
+          <button className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-normal transition hover:bg-orange-500">
             WhatsApp
           </button>
 
@@ -485,7 +485,7 @@ const navigationClass = screen => (
 
       </aside>
 
-      <main className="min-w-0 flex-1 p-10">
+      <main className="min-w-0 flex-1 p-6 lg:p-8">
 
 {pantalla === 'usuarios' && (
   <Usuarios usuarioActual={usuario} />
@@ -660,7 +660,7 @@ const navigationClass = screen => (
 
   <div className="bg-blue-50 border-l-4 border-blue-500 rounded-2xl p-4 shadow">
   <h3 className="text-gray-600">Total Leads</h3>
-  <p className="text-4xl font-bold text-blue-600">
+  <p className="text-4xl font-normal text-blue-600">
 
     {totalLeads}
 
@@ -669,28 +669,28 @@ const navigationClass = screen => (
 
   <div className="bg-yellow-50 border-l-4 border-yellow-500 rounded-2xl p-4 shadow">
   <h3 className="text-gray-600">Nuevos</h3>
-  <p className="text-4xl font-bold text-yellow-600">
+  <p className="text-4xl font-normal text-yellow-600">
     {nuevos}
   </p>
  </div>
 
   <div className="bg-orange-50 border-l-4 border-orange-500 rounded-2xl p-4 shadow">
   <h3 className="text-gray-600">Contactados</h3>
-  <p className="text-4xl font-bold text-orange-600">
+  <p className="text-4xl font-normal text-orange-600">
     {contactados}
   </p>
  </div>
 
   <div className="bg-green-50 border-l-4 border-green-500 rounded-2xl p-4 shadow">
   <h3 className="text-gray-600">Ganados</h3>
-  <p className="text-4xl font-bold text-green-600">
+  <p className="text-4xl font-normal text-green-600">
     {ganados}
   </p>
  </div>
 
   <div className="bg-red-50 border-l-4 border-red-500 rounded-2xl p-4 shadow">
   <h3 className="text-gray-600">Perdidos</h3>
-  <p className="text-4xl font-bold text-red-600">
+  <p className="text-4xl font-normal text-red-600">
     {perdidos}
   </p>
 
@@ -748,7 +748,7 @@ const navigationClass = screen => (
     href={`https://wa.me/52${lead.telefono}`}
     target="_blank"
     rel="noreferrer"
-    className="text-green-600 font-semibold hover:underline"
+    className="text-green-600 font-normal hover:underline"
   >
     📱 {lead.telefono}
  

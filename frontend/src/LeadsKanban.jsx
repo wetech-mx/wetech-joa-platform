@@ -97,7 +97,7 @@ const obtenerColorLead = (lead) => {
   new Date(lead.proximo_contacto) < new Date(new Date().setHours(0,0,0,0))
 ) && (
 
-  <div className="text-red-600 text-xs font-bold mb-1">
+  <div className="text-red-600 text-xs font-normal mb-1">
     🔴 Seguimiento vencido
   </div>
 
@@ -121,7 +121,7 @@ const obtenerColorLead = (lead) => {
 
 </div>
 
-<div className="text-xs text-orange-600 font-semibold">
+<div className="text-xs text-orange-600 font-normal">
   🔥 {lead.prioridad}
 </div>
 

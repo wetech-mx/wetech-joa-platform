@@ -38,7 +38,7 @@ function DetailItem({
       <p className="text-xs font-bold uppercase text-gray-500">
         {label}
       </p>
-      <div className="mt-1 break-words font-semibold">
+      <div className="mt-1 break-words font-normal">
         {value ?? '—'}
       </div>
     </div>
@@ -245,7 +245,7 @@ export default function CarteraDrawer({
             type="button"
             onClick={onClose}
             aria-label="Cerrar detalle"
-            className="rounded-lg bg-gray-900 px-4 py-2 font-bold text-white"
+            className="rounded-lg bg-gray-900 px-4 py-2 font-normal text-white"
           >
             Cerrar
           </button>
@@ -253,7 +253,7 @@ export default function CarteraDrawer({
 
         <div className="space-y-6 p-6">
           {loading && (
-            <p className="font-bold text-orange-600">
+            <p className="font-normal text-orange-600">
               Consultando información…
             </p>
           )}
@@ -476,7 +476,7 @@ export default function CarteraDrawer({
                   <button
                     type="submit"
                     disabled={saving}
-                    className="rounded-xl bg-orange-600 px-5 py-3 font-bold text-white disabled:bg-gray-300"
+                    className="rounded-xl bg-orange-600 px-5 py-3 font-normal text-white disabled:bg-gray-300"
                   >
                     Guardar estado
                   </button>
@@ -505,7 +505,7 @@ export default function CarteraDrawer({
                   <button
                     type="submit"
                     disabled={saving}
-                    className="mt-3 rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:bg-gray-300"
+                    className="mt-3 rounded-xl bg-blue-600 px-5 py-3 font-normal text-white disabled:bg-gray-300"
                   >
                     Agregar nota
                   </button>
@@ -562,7 +562,7 @@ export default function CarteraDrawer({
                     <button
                       type="submit"
                       disabled={saving}
-                      className="rounded-xl bg-purple-700 px-5 py-3 font-bold text-white disabled:bg-gray-300"
+                      className="rounded-xl bg-purple-700 px-5 py-3 font-normal text-white disabled:bg-gray-300"
                     >
                       Reasignar cuenta
                     </button>

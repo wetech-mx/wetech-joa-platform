@@ -5,6 +5,7 @@ const {
   crearOrigen,
   editarIntegracion,
   editarOrigen,
+  obtenerEjecuciones,
   obtenerIntegraciones,
   obtenerOrigenes,
   obtenerTiposIntegracion
@@ -47,6 +48,11 @@ router.patch(
 router.get(
   '/integraciones',
   obtenerIntegraciones
+)
+
+router.get(
+  '/integraciones/ejecuciones',
+  obtenerEjecuciones
 )
 
 router.post(

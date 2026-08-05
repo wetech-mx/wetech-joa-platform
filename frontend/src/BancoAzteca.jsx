@@ -145,7 +145,7 @@ export default function BancoAzteca() {
         )}
 
         <form onSubmit={descargar} className="mt-6">
-          <label className="block font-bold" htmlFor="fecha-banco">
+          <label className="block font-normal" htmlFor="fecha-banco">
             Fecha de consulta
           </label>
           <input
@@ -160,7 +160,7 @@ export default function BancoAzteca() {
           <button
             type="submit"
             disabled={!estado.configured || downloading}
-            className="bg-orange-600 disabled:bg-gray-300 text-white font-bold px-5 py-3 rounded-lg mt-5"
+            className="bg-orange-600 disabled:bg-gray-300 text-white font-normal px-5 py-3 rounded-lg mt-5"
           >
             {downloading
               ? 'Consultando banco…'

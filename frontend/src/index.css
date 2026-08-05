@@ -1,1 +1,51 @@
 @import "tailwindcss";
+
+:root {
+  --crm-orange: #f4510b;
+  --crm-blue: #2563eb;
+  --crm-sidebar: #050505;
+  --crm-surface: #ffffff;
+  --crm-canvas: #f3f4f6;
+  --crm-text: #111827;
+  --crm-muted: #6b7280;
+  font-family: Arial, Helvetica, sans-serif;
+  font-synthesis: none;
+  color: var(--crm-text);
+  background: var(--crm-canvas);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--crm-canvas);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+select {
+  cursor: pointer;
+}
+
+/*
+ * Integraciones refuerza la jerarquía general porque contiene tablas y
+ * controles administrativos densos. La negrita se reserva para títulos y
+ * encabezados declarados.
+ */
+.crm-navigation button,
+.integrations-page * {
+  font-weight: 400 !important;
+}
+
+.integrations-page :is(h1, h2, h3, h4, h5, h6),
+.integrations-page .font-bold,
+.integrations-page thead th {
+  font-weight: 700 !important;
+}

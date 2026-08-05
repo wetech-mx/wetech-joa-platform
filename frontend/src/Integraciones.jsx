@@ -34,6 +34,23 @@ const EXECUTION_MODES = [
   { value: 'evento', label: 'Por evento' }
 ]
 
+const EXECUTION_STATUSES = [
+  { value: '', label: 'Todos los resultados' },
+  { value: 'iniciada', label: 'En curso' },
+  { value: 'completada', label: 'Completada' },
+  { value: 'sin_datos', label: 'Sin datos' },
+  { value: 'fallida', label: 'Fallida' },
+  { value: 'omitida', label: 'Omitida' }
+]
+
+const EXECUTION_STAGES = [
+  { value: '', label: 'Todas las etapas' },
+  { value: 'extraccion', label: 'Extracción' },
+  { value: 'importacion', label: 'Importación' },
+  { value: 'sincronizacion', label: 'Sincronización' },
+  { value: 'prueba', label: 'Prueba' }
+]
+
 const DEFAULT_ADAPTERS = {
   api_rest: 'api_rest_generica',
   api_soap: 'api_soap_generica',
@@ -89,7 +106,7 @@ function originTypeLabel(value) {
 function StatusBadge({ active }) {
   return (
     <span
-      className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-normal ${
         active
           ? 'bg-green-100 text-green-700'
           : 'bg-gray-200 text-gray-600'
@@ -103,7 +120,7 @@ function StatusBadge({ active }) {
 function SecretBadge({ configured }) {
   return (
     <span
-      className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-normal ${
         configured
           ? 'bg-blue-100 text-blue-700'
           : 'bg-amber-100 text-amber-800'
@@ -116,6 +133,61 @@ function SecretBadge({ configured }) {
   )
 }
 
+function ExecutionBadge({ status }) {
+  const styles = {
+    iniciada: 'bg-blue-100 text-blue-700',
+    completada: 'bg-green-100 text-green-700',
+    sin_datos: 'bg-amber-100 text-amber-800',
+    fallida: 'bg-red-100 text-red-700',
+    omitida: 'bg-gray-200 text-gray-600'
+  }
+  const labels = {
+    iniciada: 'En curso',
+    completada: 'Completada',
+    sin_datos: 'Sin datos',
+    fallida: 'Fallida',
+    omitida: 'Omitida'
+  }
+
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-normal ${styles[status] || styles.omitida}`}>
+      {labels[status] || status}
+    </span>
+  )
+}
+
+function formatExecutionDate(value) {
+  if (!value) {
+    return '—'
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+
+  return new Intl.DateTimeFormat('es-MX', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: 'America/Mexico_City'
+  }).format(date)
+}
+
+function formatDuration(value) {
+  const milliseconds = Number(value)
+
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) {
+    return '—'
+  }
+
+  if (milliseconds < 1000) {
+    return `${milliseconds} ms`
+  }
+
+  return `${(milliseconds / 1000).toFixed(1)} s`
+}
+
 function Metric({ label, value, tone }) {
   const tones = {
     orange: 'border-orange-500 bg-orange-50 text-orange-700',
@@ -126,12 +198,12 @@ function Metric({ label, value, tone }) {
 
   return (
     <article
-      className={`rounded-2xl border-l-4 p-5 shadow-sm ${tones[tone] || tones.gray}`}
+      className={`rounded-xl border-l-4 p-4 shadow-sm ${tones[tone] || tones.gray}`}
     >
       <p className="text-xs font-bold uppercase tracking-wide">
         {label}
       </p>
-      <p className="mt-2 text-3xl font-bold">
+      <p className="mt-1.5 text-2xl font-normal">
         {value}
       </p>
     </article>
@@ -146,20 +218,20 @@ function Modal({ title, children, onClose }) {
       aria-modal="true"
       aria-label={title}
     >
-      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-7 shadow-2xl">
-        <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
               Administración protegida
             </p>
-            <h2 className="mt-1 text-2xl font-bold">
+            <h2 className="mt-1 text-xl font-bold">
               {title}
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl bg-gray-100 px-4 py-2 font-bold text-gray-600 hover:bg-gray-200"
+            className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-normal text-gray-600 hover:bg-gray-200"
           >
             Cerrar
           </button>
@@ -173,7 +245,7 @@ function Modal({ title, children, onClose }) {
 function Field({ label, hint, children }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-bold text-gray-800">
+      <span className="mb-1 block text-sm font-normal text-gray-800">
         {label}
       </span>
       {children}
@@ -190,7 +262,14 @@ export default function Integraciones() {
   const [types, setTypes] = useState([])
   const [origins, setOrigins] = useState([])
   const [integrations, setIntegrations] = useState([])
+  const [executions, setExecutions] = useState([])
   const [selectedOriginId, setSelectedOriginId] = useState('')
+  const [
+    selectedExecutionIntegrationId,
+    setSelectedExecutionIntegrationId
+  ] = useState('')
+  const [executionStatus, setExecutionStatus] = useState('')
+  const [executionStage, setExecutionStage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -212,10 +291,16 @@ export default function Integraciones() {
       const responses = await Promise.all([
         apiFetch('/crm-api/integraciones/tipos'),
         apiFetch('/crm-api/integraciones/origenes'),
-        apiFetch('/crm-api/integraciones')
+        apiFetch('/crm-api/integraciones'),
+        apiFetch('/crm-api/integraciones/ejecuciones?limite=100')
       ])
 
-      const [typeData, originData, integrationData] =
+      const [
+        typeData,
+        originData,
+        integrationData,
+        executionData
+      ] =
         await Promise.all([
           readJson(
             responses[0],
@@ -228,6 +313,10 @@ export default function Integraciones() {
           readJson(
             responses[2],
             'No fue posible consultar las integraciones'
+          ),
+          readJson(
+            responses[3],
+            'No fue posible consultar el historial de ejecuciones'
           )
         ])
 
@@ -235,6 +324,7 @@ export default function Integraciones() {
         !Array.isArray(typeData)
         || !Array.isArray(originData)
         || !Array.isArray(integrationData)
+        || !Array.isArray(executionData)
       ) {
         throw new Error(
           'La API de integraciones devolvió un formato inesperado'
@@ -244,10 +334,12 @@ export default function Integraciones() {
       setTypes(typeData)
       setOrigins(originData)
       setIntegrations(integrationData)
+      setExecutions(executionData)
     } catch (requestError) {
       setTypes([])
       setOrigins([])
       setIntegrations([])
+      setExecutions([])
       setError(requestError.message)
     } finally {
       setLoading(false)
@@ -269,6 +361,26 @@ export default function Integraciones() {
       item => String(item.origen_id) === selectedOriginId
     )
   }, [integrations, selectedOriginId])
+
+  const visibleExecutions = useMemo(() => (
+    executions.filter(execution => (
+      (!selectedOriginId
+        || String(execution.origen_id) === selectedOriginId)
+      && (!selectedExecutionIntegrationId
+        || String(execution.integracion_id)
+          === selectedExecutionIntegrationId)
+      && (!executionStatus
+        || execution.estado === executionStatus)
+      && (!executionStage
+        || execution.etapa === executionStage)
+    ))
+  ), [
+    executions,
+    executionStage,
+    executionStatus,
+    selectedExecutionIntegrationId,
+    selectedOriginId
+  ])
 
   const activeOrigins = origins.filter(item => item.activo).length
   const activeIntegrations = integrations.filter(
@@ -438,16 +550,16 @@ export default function Integraciones() {
   }
 
   return (
-    <section>
-      <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
+    <section className="integrations-page text-[14px] font-normal">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-bold uppercase tracking-wide text-orange-600">
+          <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
             Administración multi-origen
           </p>
-          <h1 className="mt-1 text-4xl font-bold">
+          <h1 className="mt-1 text-3xl font-bold">
             Integraciones
           </h1>
-          <p className="mt-2 max-w-3xl text-gray-500">
+          <p className="mt-1.5 max-w-3xl text-sm text-gray-500">
             Registra clientes, sistemas y métodos de intercambio sin convertirlos en empresas independientes.
           </p>
         </div>
@@ -455,7 +567,7 @@ export default function Integraciones() {
           <button
             type="button"
             onClick={openNewOrigin}
-            className="rounded-xl bg-orange-600 px-5 py-3 font-bold text-white shadow-sm hover:bg-orange-700"
+            className="rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-normal text-white shadow-sm hover:bg-orange-700"
           >
             + Nuevo origen
           </button>
@@ -463,14 +575,14 @@ export default function Integraciones() {
             type="button"
             onClick={() => openNewIntegration()}
             disabled={origins.length === 0}
-            className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-normal text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             + Nueva integración
           </button>
         </div>
       </div>
 
-      <div className="mb-7 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+      <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
         <p className="font-bold">
           Las credenciales nunca se capturan en esta pantalla.
         </p>
@@ -491,7 +603,7 @@ export default function Integraciones() {
         </div>
       )}
 
-      <div className="mb-8 grid gap-4 md:grid-cols-4">
+      <div className="mb-6 grid gap-3 md:grid-cols-4">
         <Metric
           label="Orígenes"
           value={origins.length}
@@ -514,10 +626,10 @@ export default function Integraciones() {
         />
       </div>
 
-      <div className="mb-8 overflow-hidden rounded-3xl bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b p-6">
+      <div className="mb-6 overflow-hidden rounded-2xl bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b p-5">
           <div>
-            <h2 className="text-2xl font-bold">
+            <h2 className="text-xl font-bold">
               Orígenes de información
             </h2>
             <p className="mt-1 text-sm text-gray-500">
@@ -527,7 +639,7 @@ export default function Integraciones() {
           <button
             type="button"
             onClick={loadData}
-            className="rounded-xl border border-gray-300 px-4 py-2 font-bold text-gray-700 hover:bg-gray-50"
+            className="rounded-xl border border-gray-300 px-4 py-2 font-normal text-gray-700 hover:bg-gray-50"
           >
             Actualizar
           </button>
@@ -537,12 +649,12 @@ export default function Integraciones() {
           <table className="w-full min-w-[850px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
-                <th className="px-6 py-4">Origen</th>
-                <th className="px-6 py-4">Código</th>
-                <th className="px-6 py-4">Tipo</th>
-                <th className="px-6 py-4">Conectores</th>
-                <th className="px-6 py-4">Estado</th>
-                <th className="px-6 py-4 text-right">Acciones</th>
+                <th className="px-4 py-3">Origen</th>
+                <th className="px-4 py-3">Código</th>
+                <th className="px-4 py-3">Tipo</th>
+                <th className="px-4 py-3">Conectores</th>
+                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -550,7 +662,7 @@ export default function Integraciones() {
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-6 py-12 text-center text-gray-500"
+                    className="px-4 py-10 text-center text-gray-500"
                   >
                     No hay orígenes registrados.
                   </td>
@@ -558,49 +670,50 @@ export default function Integraciones() {
               )}
               {origins.map(origin => (
                 <tr key={origin.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <p className="font-bold text-gray-900">
+                  <td className="px-4 py-3">
+                    <p className="font-normal text-gray-900">
                       {origin.nombre}
                     </p>
                     <p className="mt-1 max-w-md text-xs text-gray-500">
                       {origin.descripcion || 'Sin descripción'}
                     </p>
                   </td>
-                  <td className="px-6 py-4 font-mono text-xs text-gray-600">
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">
                     {origin.codigo}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     {originTypeLabel(origin.tipo)}
                   </td>
-                  <td className="px-6 py-4">
-                    <span className="font-bold">
+                  <td className="px-4 py-3">
+                    <span className="font-normal">
                       {Number(origin.integraciones) || 0}
                     </span>
                     <span className="ml-1 text-xs text-gray-500">
                       ({Number(origin.integraciones_activas) || 0} activos)
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     <StatusBadge active={origin.activo} />
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => {
                           setSelectedOriginId(String(origin.id))
+                          setSelectedExecutionIntegrationId('')
                           document
                             .getElementById('lista-integraciones')
                             ?.scrollIntoView({ behavior: 'smooth' })
                         }}
-                        className="rounded-lg bg-blue-50 px-3 py-2 font-bold text-blue-700 hover:bg-blue-100"
+                        className="rounded-lg bg-blue-50 px-3 py-2 font-normal text-blue-700 hover:bg-blue-100"
                       >
                         Ver conectores
                       </button>
                       <button
                         type="button"
                         onClick={() => openEditOrigin(origin)}
-                        className="rounded-lg bg-gray-100 px-3 py-2 font-bold text-gray-700 hover:bg-gray-200"
+                        className="rounded-lg bg-gray-100 px-3 py-2 font-normal text-gray-700 hover:bg-gray-200"
                       >
                         Editar
                       </button>
@@ -615,11 +728,11 @@ export default function Integraciones() {
 
       <div
         id="lista-integraciones"
-        className="overflow-hidden rounded-3xl bg-white shadow-sm"
+        className="mb-6 overflow-hidden rounded-2xl bg-white shadow-sm"
       >
-        <div className="flex flex-wrap items-end justify-between gap-4 border-b p-6">
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b p-5">
           <div>
-            <h2 className="text-2xl font-bold">
+            <h2 className="text-xl font-bold">
               Conectores
             </h2>
             <p className="mt-1 text-sm text-gray-500">
@@ -629,8 +742,11 @@ export default function Integraciones() {
           <Field label="Filtrar por origen">
             <select
               value={selectedOriginId}
-              onChange={event => setSelectedOriginId(event.target.value)}
-              className="min-w-64 rounded-xl border border-gray-300 bg-white px-4 py-3"
+              onChange={event => {
+                setSelectedOriginId(event.target.value)
+                setSelectedExecutionIntegrationId('')
+              }}
+              className="min-w-64 rounded-lg border border-gray-300 bg-white px-3 py-2.5"
             >
               <option value="">Todos los orígenes</option>
               {origins.map(origin => (
@@ -646,14 +762,14 @@ export default function Integraciones() {
           <table className="w-full min-w-[1100px] text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase text-gray-500">
               <tr>
-                <th className="px-6 py-4">Integración</th>
-                <th className="px-6 py-4">Origen</th>
-                <th className="px-6 py-4">Método</th>
-                <th className="px-6 py-4">Flujo</th>
-                <th className="px-6 py-4">Ejecución</th>
-                <th className="px-6 py-4">Servidor</th>
-                <th className="px-6 py-4">Estado</th>
-                <th className="px-6 py-4 text-right">Acciones</th>
+                <th className="px-4 py-3">Integración</th>
+                <th className="px-4 py-3">Origen</th>
+                <th className="px-4 py-3">Método</th>
+                <th className="px-4 py-3">Flujo</th>
+                <th className="px-4 py-3">Ejecución</th>
+                <th className="px-4 py-3">Servidor</th>
+                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -661,7 +777,7 @@ export default function Integraciones() {
                 <tr>
                   <td
                     colSpan="8"
-                    className="px-6 py-12 text-center text-gray-500"
+                    className="px-4 py-10 text-center text-gray-500"
                   >
                     No hay integraciones para mostrar.
                   </td>
@@ -672,8 +788,8 @@ export default function Integraciones() {
                   key={integration.id}
                   className="hover:bg-gray-50"
                 >
-                  <td className="px-6 py-4">
-                    <p className="font-bold text-gray-900">
+                  <td className="px-4 py-3">
+                    <p className="font-normal text-gray-900">
                       {integration.nombre}
                     </p>
                     <p className="mt-1 font-mono text-xs text-gray-500">
@@ -685,39 +801,184 @@ export default function Integraciones() {
                       </p>
                     )}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     {integration.origen_nombre}
                   </td>
-                  <td className="px-6 py-4">
-                    <p className="font-semibold">
+                  <td className="px-4 py-3">
+                    <p className="font-normal">
                       {integration.tipo_nombre}
                     </p>
                     <p className="text-xs text-gray-500">
                       {integration.categoria}
                     </p>
                   </td>
-                  <td className="px-6 py-4 capitalize">
+                  <td className="px-4 py-3 capitalize">
                     {integration.direccion}
                   </td>
-                  <td className="px-6 py-4 capitalize">
+                  <td className="px-4 py-3 capitalize">
                     {integration.modo_ejecucion}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     <SecretBadge
                       configured={integration.secreto_configurado}
                     />
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     <StatusBadge active={integration.activo} />
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-4 py-3 text-right">
                     <button
                       type="button"
                       onClick={() => openEditIntegration(integration)}
-                      className="rounded-lg bg-gray-100 px-3 py-2 font-bold text-gray-700 hover:bg-gray-200"
+                      className="rounded-lg bg-gray-100 px-3 py-2 font-normal text-gray-700 hover:bg-gray-200"
                     >
                       Editar
                     </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+        <div className="border-b p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-blue-600">
+                Auditoría operativa
+              </p>
+              <h2 className="mt-1 text-xl font-bold">
+                Historial de ejecuciones
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Últimos intentos de conexión, extracción e importación, sin mostrar credenciales.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadData}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-normal text-gray-700 hover:bg-gray-50"
+            >
+              Actualizar historial
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <Field label="Integración">
+              <select
+                value={selectedExecutionIntegrationId}
+                onChange={event => setSelectedExecutionIntegrationId(
+                  event.target.value
+                )}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5"
+              >
+                <option value="">Todas las integraciones</option>
+                {visibleIntegrations.map(integration => (
+                  <option
+                    key={integration.id}
+                    value={integration.id}
+                  >
+                    {integration.nombre}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Resultado">
+              <select
+                value={executionStatus}
+                onChange={event => setExecutionStatus(
+                  event.target.value
+                )}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5"
+              >
+                {EXECUTION_STATUSES.map(item => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Etapa">
+              <select
+                value={executionStage}
+                onChange={event => setExecutionStage(
+                  event.target.value
+                )}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5"
+              >
+                {EXECUTION_STAGES.map(item => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1050px] text-left text-sm">
+            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+              <tr>
+                <th className="px-4 py-3">Inicio</th>
+                <th className="px-4 py-3">Origen / integración</th>
+                <th className="px-4 py-3">Etapa</th>
+                <th className="px-4 py-3">Disparador</th>
+                <th className="px-4 py-3">Resultado</th>
+                <th className="px-4 py-3">Duración</th>
+                <th className="px-4 py-3">Registros</th>
+                <th className="px-4 py-3">Código</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {!loading && visibleExecutions.length === 0 && (
+                <tr>
+                  <td
+                    colSpan="8"
+                    className="px-4 py-10 text-center text-gray-500"
+                  >
+                    Aún no hay ejecuciones para los filtros seleccionados.
+                  </td>
+                </tr>
+              )}
+              {visibleExecutions.map(execution => (
+                <tr key={execution.id} className="hover:bg-gray-50">
+                  <td className="whitespace-nowrap px-4 py-3">
+                    {formatExecutionDate(execution.iniciada_at)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-normal text-gray-900">
+                      {execution.integracion_nombre}
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {execution.origen_nombre}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 capitalize">
+                    {execution.etapa}
+                  </td>
+                  <td className="px-4 py-3 capitalize">
+                    {execution.disparador}
+                  </td>
+                  <td className="px-4 py-3">
+                    <ExecutionBadge status={execution.estado} />
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    {formatDuration(execution.duracion_ms)}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    {Number(execution.registros_procesados) || 0}
+                    <span className="text-gray-400">
+                      {' / '}
+                      {Number(execution.registros_recibidos) || 0}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">
+                    {execution.error_codigo || '—'}
                   </td>
                 </tr>
               ))}
@@ -807,7 +1068,7 @@ export default function Integraciones() {
                 className="h-5 w-5"
               />
               <span>
-                <strong className="block">Origen activo</strong>
+                <span className="block font-normal">Origen activo</span>
                 <span className="text-sm text-gray-500">
                   Los orígenes inactivos se conservan para auditoría.
                 </span>
@@ -818,14 +1079,14 @@ export default function Integraciones() {
               <button
                 type="button"
                 onClick={() => setOriginModal(false)}
-                className="rounded-xl bg-gray-100 px-5 py-3 font-bold text-gray-700"
+                className="rounded-xl bg-gray-100 px-5 py-3 font-normal text-gray-700"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-xl bg-orange-600 px-5 py-3 font-bold text-white disabled:opacity-50"
+                className="rounded-xl bg-orange-600 px-5 py-3 font-normal text-white disabled:opacity-50"
               >
                 {saving ? 'Guardando…' : 'Guardar origen'}
               </button>
@@ -998,7 +1259,7 @@ export default function Integraciones() {
                 className="h-5 w-5"
               />
               <span>
-                <strong className="block">Integración activa</strong>
+                <span className="block font-normal">Integración activa</span>
                 <span className="text-sm text-gray-500">
                   Los conectores nuevos permanecen inactivos hasta completar su configuración técnica.
                 </span>
@@ -1009,14 +1270,14 @@ export default function Integraciones() {
               <button
                 type="button"
                 onClick={() => setIntegrationModal(false)}
-                className="rounded-xl bg-gray-100 px-5 py-3 font-bold text-gray-700"
+                className="rounded-xl bg-gray-100 px-5 py-3 font-normal text-gray-700"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:opacity-50"
+                className="rounded-xl bg-blue-600 px-5 py-3 font-normal text-white disabled:opacity-50"
               >
                 {saving ? 'Guardando…' : 'Guardar integración'}
               </button>

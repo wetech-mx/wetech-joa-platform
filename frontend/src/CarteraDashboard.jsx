@@ -48,7 +48,7 @@ function MetricCard({
       <p className="text-xs font-bold uppercase tracking-wide">
         {label}
       </p>
-      <p className="mt-2 break-words text-3xl font-bold">
+      <p className="mt-2 break-words text-3xl font-normal">
         {value}
       </p>
       {detail && (
@@ -93,10 +93,10 @@ function DistributionList({
         return (
           <div key={String(item[labelKey])}>
             <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-              <span className="font-semibold text-gray-700">
+              <span className="font-normal text-gray-700">
                 {label}
               </span>
-              <span className="font-bold text-gray-900">
+              <span className="font-normal text-gray-900">
                 {formatNumber(total)}
               </span>
             </div>
@@ -252,7 +252,7 @@ export default function CarteraDashboard() {
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
-          <label className="text-sm font-bold text-gray-700">
+          <label className="text-sm font-normal text-gray-700">
             Origen
             <select
               value={selectedOriginId}
@@ -281,7 +281,7 @@ export default function CarteraDashboard() {
               setRefreshVersion(value => value + 1)
             }}
             disabled={loading}
-            className="rounded-xl border border-gray-300 bg-white px-4 py-2 font-bold text-gray-700 hover:bg-gray-50 disabled:text-gray-400"
+            className="rounded-xl border border-gray-300 bg-white px-4 py-2 font-normal text-gray-700 hover:bg-gray-50 disabled:text-gray-400"
           >
             {loading ? 'Consultando…' : 'Actualizar resumen'}
           </button>
@@ -400,10 +400,10 @@ export default function CarteraDashboard() {
                 <tbody className="divide-y">
                   {executives.map(item => (
                     <tr key={item.id || 'sin-asignar'}>
-                      <td className="px-6 py-3 font-semibold">
+                      <td className="px-6 py-3 font-normal">
                         {item.name || 'Sin asignar'}
                       </td>
-                      <td className="px-6 py-3 text-right font-bold">
+                      <td className="px-6 py-3 text-right font-normal">
                         {formatNumber(item.total)}
                       </td>
                     </tr>

@@ -20,6 +20,11 @@ const FINAL_STATUSES = Object.freeze(new Set([
   'omitida'
 ]))
 
+const ALL_STATUSES = Object.freeze(new Set([
+  'iniciada',
+  ...FINAL_STATUSES
+]))
+
 const SAFE_METRIC_KEYS = Object.freeze(new Set([
   'campanias',
   'registros_recibidos',
@@ -481,13 +486,123 @@ async function listIntegrationExecutions({
   return result.rows
 }
 
+async function listCompanyIntegrationExecutions({
+  pool,
+  empresaId,
+  origenId,
+  integracionId,
+  status,
+  stage,
+  limit = 50
+}) {
+  if (!pool || typeof pool.query !== 'function') {
+    throw new IntegrationExecutionError(
+      'INTEGRATION_EXECUTION_POOL_INVALID',
+      'La conexión PostgreSQL no es válida'
+    )
+  }
+
+  const params = [positiveInteger(empresaId, 'empresa_id')]
+  const conditions = [
+    'ejecucion.empresa_id = $1::INTEGER'
+  ]
+
+  if (origenId !== undefined && origenId !== '') {
+    params.push(positiveInteger(origenId, 'origen_id'))
+    conditions.push(
+      `origen.id = $${params.length}::BIGINT`
+    )
+  }
+
+  if (integracionId !== undefined && integracionId !== '') {
+    params.push(positiveInteger(
+      integracionId,
+      'integracion_id'
+    ))
+    conditions.push(
+      `ejecucion.integracion_id = $${params.length}::BIGINT`
+    )
+  }
+
+  if (status !== undefined && status !== '') {
+    params.push(allowedValue(
+      status,
+      'estado',
+      ALL_STATUSES
+    ))
+    conditions.push(
+      `ejecucion.estado = $${params.length}::TEXT`
+    )
+  }
+
+  if (stage !== undefined && stage !== '') {
+    params.push(allowedValue(stage, 'etapa', STAGES))
+    conditions.push(
+      `ejecucion.etapa = $${params.length}::TEXT`
+    )
+  }
+
+  const normalizedLimit = Number(limit)
+
+  if (
+    !Number.isSafeInteger(normalizedLimit)
+    || normalizedLimit < 1
+    || normalizedLimit > 100
+  ) {
+    throw new IntegrationExecutionError(
+      'INTEGRATION_EXECUTION_LIMIT_INVALID',
+      'El límite debe estar entre 1 y 100'
+    )
+  }
+
+  params.push(normalizedLimit)
+
+  const result = await pool.query(
+    `
+    SELECT
+      ejecucion.id::TEXT AS id,
+      ejecucion.integracion_id::TEXT AS integracion_id,
+      integracion.nombre AS integracion_nombre,
+      integracion.codigo AS integracion_codigo,
+      origen.id::TEXT AS origen_id,
+      origen.nombre AS origen_nombre,
+      origen.codigo AS origen_codigo,
+      ejecucion.etapa,
+      ejecucion.disparador,
+      ejecucion.estado,
+      ejecucion.iniciada_at,
+      ejecucion.finalizada_at,
+      ejecucion.duracion_ms::TEXT AS duracion_ms,
+      ejecucion.registros_recibidos,
+      ejecucion.registros_procesados,
+      ejecucion.metricas,
+      ejecucion.error_codigo
+    FROM public.crm_integracion_ejecuciones ejecucion
+    INNER JOIN public.crm_integraciones integracion
+      ON integracion.empresa_id = ejecucion.empresa_id
+      AND integracion.id = ejecucion.integracion_id
+    INNER JOIN public.crm_origenes origen
+      ON origen.empresa_id = integracion.empresa_id
+      AND origen.id = integracion.origen_id
+    WHERE ${conditions.join('\n      AND ')}
+    ORDER BY ejecucion.iniciada_at DESC, ejecucion.id DESC
+    LIMIT $${params.length}::INTEGER
+    `,
+    params
+  )
+
+  return result.rows
+}
+
 module.exports = {
+  ALL_STATUSES,
   FINAL_STATUSES,
   IntegrationExecutionError,
   SAFE_METRIC_KEYS,
   STAGES,
   TRIGGERS,
   finishIntegrationExecution,
+  listCompanyIntegrationExecutions,
   listIntegrationExecutions,
   normalizeErrorCode,
   normalizeMetrics,

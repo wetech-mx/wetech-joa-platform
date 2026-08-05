@@ -293,6 +293,10 @@ test('protege todas las rutas administrativas', () => {
     routes,
     /router\.use\(\s*verificaToken,\s*requiereEmpresa,\s*requiereAdmin\s*\)/
   )
+  assert.match(
+    routes,
+    /'\/integraciones\/ejecuciones',\s*obtenerEjecuciones/
+  )
 })
 
 test('registra las rutas de integraciones en el servidor', () => {

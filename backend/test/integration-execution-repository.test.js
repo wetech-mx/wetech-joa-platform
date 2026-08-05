@@ -6,6 +6,7 @@ const assert = require('node:assert/strict')
 const {
   IntegrationExecutionError,
   finishIntegrationExecution,
+  listCompanyIntegrationExecutions,
   listIntegrationExecutions,
   normalizeErrorCode,
   normalizeMetrics,
@@ -367,5 +368,68 @@ test('lista historial sin campos secretos y dentro de empresa', async () => {
   assert.doesNotMatch(
     calls[0].sql,
     /referencia_secreto|configuracion_no_secreta/
+  )
+})
+
+test('lista historial administrativo con filtros seguros y multiempresa', async () => {
+  const calls = []
+  const rows = [{
+    id: '31',
+    origen_nombre: 'Banco Azteca',
+    integracion_nombre: 'API Banco Azteca',
+    estado: 'sin_datos'
+  }]
+
+  const result = await listCompanyIntegrationExecutions({
+    pool: {
+      async query(sql, params) {
+        calls.push({
+          sql: String(sql).replace(/\s+/g, ' ').trim(),
+          params
+        })
+        return { rows }
+      }
+    },
+    empresaId: 7,
+    origenId: '10',
+    integracionId: '20',
+    status: 'sin_datos',
+    stage: 'extraccion',
+    limit: 40
+  })
+
+  assert.deepEqual(result, rows)
+  assert.deepEqual(
+    calls[0].params,
+    ['7', '10', '20', 'sin_datos', 'extraccion', 40]
+  )
+  assert.match(
+    calls[0].sql,
+    /ejecucion\.empresa_id = \$1::INTEGER/
+  )
+  assert.match(
+    calls[0].sql,
+    /integracion\.empresa_id = ejecucion\.empresa_id/
+  )
+  assert.match(
+    calls[0].sql,
+    /origen\.empresa_id = integracion\.empresa_id/
+  )
+  assert.doesNotMatch(
+    calls[0].sql,
+    /referencia_secreto|configuracion_no_secreta|error_detalle/
+  )
+})
+
+test('rechaza filtros desconocidos del historial administrativo', async () => {
+  await assert.rejects(
+    () => listCompanyIntegrationExecutions({
+      pool: { query: async () => ({ rows: [] }) },
+      empresaId: 7,
+      status: 'borrada'
+    }),
+    error => (
+      error.code === 'INTEGRATION_EXECUTION_VALUE_INVALID'
+    )
   )
 })

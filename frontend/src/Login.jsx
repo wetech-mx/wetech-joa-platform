@@ -46,7 +46,7 @@ export default function Login({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="crm-login min-h-screen flex items-center justify-center bg-gray-100">
 
       <form
         onSubmit={iniciarSesion}
@@ -92,7 +92,7 @@ export default function Login({ onLogin }) {
               href="https://we-tech.mx"
               target="_blank"
               rel="noreferrer"
-              className="font-semibold hover:underline"
+              className="font-normal hover:underline"
             >
               We-Tech.mx
             </a>

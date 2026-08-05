@@ -118,7 +118,7 @@ useEffect(() => {
       className="border rounded-lg p-3 bg-gray-50"
     >
 
-      <div className="font-semibold">
+      <div className="font-normal">
         {item.accion}
       </div>
 
