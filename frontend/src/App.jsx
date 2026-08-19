@@ -10,6 +10,7 @@ import Login from './Login'
 import BancoAzteca from './BancoAzteca'
 import Cartera from './Cartera'
 import CarteraDashboard from './CarteraDashboard'
+import CarteraGestiones from './CarteraGestiones'
 import Integraciones from './Integraciones'
 import { apiFetch } from './api'
 
@@ -449,6 +450,15 @@ const navigationClass = screen => (
 
           {usuario?.rol !== 'Ejecutivo' && (
             <button
+              onClick={() => setPantalla('gestiones')}
+              className={navigationClass('gestiones')}
+            >
+              Gestiones
+            </button>
+          )}
+
+          {usuario?.rol !== 'Ejecutivo' && (
+            <button
               onClick={() => setPantalla('integraciones')}
               className={navigationClass('integraciones')}
             >
@@ -501,6 +511,10 @@ const navigationClass = screen => (
 
 {pantalla === 'cartera' && (
   <Cartera usuario={usuario} />
+)}
+
+{pantalla === 'gestiones' && usuario?.rol !== 'Ejecutivo' && (
+  <CarteraGestiones usuario={usuario} />
 )}
 
 {(pantalla === 'dashboard' || pantalla === 'leads') && (

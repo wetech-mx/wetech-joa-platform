@@ -42,3 +42,26 @@ test('la pantalla ya no permite cambiar estado manualmente', () => {
   assert.doesNotMatch(drawer, /Agregar nota/)
   assert.match(drawer, /Registrar gestión/)
 })
+
+test('supervisión consulta y filtra gestiones estructuradas', () => {
+  const managements = source('CarteraGestiones.jsx')
+  const app = source('App.jsx')
+
+  assert.match(
+    managements,
+    /\/crm-api\/cartera\/gestiones\?\$\{query\}/
+  )
+  assert.match(managements, /name="resultado"/)
+  assert.match(managements, /name="ejecutivo"/)
+  assert.match(managements, /name="origen"/)
+  assert.match(managements, /name="desde"/)
+  assert.match(managements, /name="hasta"/)
+  assert.match(managements, /Abrir cuenta/)
+  assert.match(
+    managements,
+    /Todavía no hay gestiones registradas/
+  )
+  assert.match(app, /import CarteraGestiones/)
+  assert.match(app, /setPantalla\('gestiones'\)/)
+  assert.match(app, /usuario\?\.rol !== 'Ejecutivo'/)
+})
