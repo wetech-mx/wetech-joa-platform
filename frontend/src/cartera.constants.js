@@ -52,6 +52,23 @@ export const CARTERA_ESTADO_LABEL = Object.fromEntries(
   ])
 )
 
+export const GESTION_CANALES = [
+  { value: 'telefono', label: 'Teléfono' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'correo', label: 'Correo' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'visita', label: 'Visita' },
+  { value: 'otro', label: 'Otro' }
+]
+
+export const GESTION_RELACIONES = [
+  { value: 'titular', label: 'Titular' },
+  { value: 'familiar', label: 'Familiar' },
+  { value: 'referencia', label: 'Referencia' },
+  { value: 'tercero', label: 'Tercero' },
+  { value: 'sin_contacto', label: 'Sin contacto' }
+]
+
 export function formatMoney(value) {
   if (
     value === null

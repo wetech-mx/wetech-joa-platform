@@ -6,9 +6,12 @@ const {
   obtenerCartera,
   obtenerCuentaCartera,
   obtenerEjecutivosCartera,
+  obtenerGestionesCartera,
   obtenerOrigenesCartera,
   obtenerResumenCartera,
-  reasignarCuentaCartera
+  obtenerTipificacionesCartera,
+  reasignarCuentaCartera,
+  registrarGestionCartera
 } = require('../controllers/cartera.controller')
 
 const {
@@ -42,6 +45,21 @@ router.get(
 router.get(
   '/cartera/resumen',
   obtenerResumenCartera
+)
+
+router.get(
+  '/cartera/gestiones',
+  obtenerGestionesCartera
+)
+
+router.get(
+  '/cartera/tipificaciones',
+  obtenerTipificacionesCartera
+)
+
+router.post(
+  '/cartera/:id/gestiones',
+  registrarGestionCartera
 )
 
 router.post(

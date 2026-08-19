@@ -630,6 +630,274 @@ async function listPortfolio({
   }
 }
 
+function normalizeManagementFilters(query = {}) {
+  const from = normalizeDate(query.desde)
+  const to = normalizeDate(query.hasta)
+
+  if (from && to && from > to) {
+    throw new CarteraReadError(
+      'CARTERA_QUERY_DATE_RANGE_INVALID',
+      'La fecha inicial no puede ser posterior a la final'
+    )
+  }
+
+  return {
+    page: normalizeInteger(
+      query.page,
+      {
+        field: 'page',
+        defaultValue: 1
+      }
+    ),
+    limit: normalizeInteger(
+      query.limit,
+      {
+        field: 'limit',
+        defaultValue: DEFAULT_LIMIT,
+        maximum: MAX_LIMIT
+      }
+    ),
+    search: normalizeText(
+      query.busqueda,
+      {
+        field: 'busqueda',
+        maximum: 150
+      }
+    ),
+    result: normalizeText(
+      query.resultado,
+      {
+        field: 'resultado',
+        maximum: 100
+      }
+    ),
+    executiveId: normalizeInteger(
+      query.ejecutivo,
+      {
+        field: 'ejecutivo',
+        defaultValue: null
+      }
+    ),
+    originId: normalizeOptionalBigintId(
+      query.origen,
+      'origen'
+    ),
+    from,
+    to
+  }
+}
+
+function buildManagementListStatement({
+  filters,
+  scope
+}) {
+  const conditions = []
+  const values = []
+
+  addCondition(
+    conditions,
+    values,
+    'c.empresa_id = ?',
+    scope.empresaId
+  )
+
+  if (filters.originId) {
+    addCondition(
+      conditions,
+      values,
+      'c.origen_id = ?',
+      filters.originId
+    )
+  }
+
+  if (scope.isExecutive) {
+    addCondition(
+      conditions,
+      values,
+      'a.usuario_id = ?',
+      scope.userId
+    )
+  } else if (filters.executiveId) {
+    addCondition(
+      conditions,
+      values,
+      'g.usuario_id = ?',
+      filters.executiveId
+    )
+  }
+
+  if (filters.result) {
+    values.push(filters.result.toLowerCase())
+    conditions.push(`
+      (
+        LOWER(g.tipificacion_codigo) = LOWER($${values.length})
+        OR LOWER(g.tipificacion_nombre) = LOWER($${values.length})
+        OR LOWER(COALESCE(g.codigo_resultado, ''))
+          = LOWER($${values.length})
+      )
+    `)
+  }
+
+  if (filters.from) {
+    addCondition(
+      conditions,
+      values,
+      'g.creada_at >= ?::DATE',
+      filters.from
+    )
+  }
+
+  if (filters.to) {
+    addCondition(
+      conditions,
+      values,
+      "g.creada_at < (?::DATE + INTERVAL '1 day')",
+      filters.to
+    )
+  }
+
+  if (filters.search) {
+    values.push(`%${filters.search}%`)
+    conditions.push(`
+      (
+        LOWER(COALESCE(s.nombre, ''))
+          LIKE LOWER($${values.length})
+        OR LOWER(c.id_cliente)
+          LIKE LOWER($${values.length})
+        OR LOWER(c.folio)
+          LIKE LOWER($${values.length})
+        OR LOWER(COALESCE(g.telefono_contactado, ''))
+          LIKE LOWER($${values.length})
+        OR LOWER(COALESCE(g.persona_contactada, ''))
+          LIKE LOWER($${values.length})
+        OR LOWER(COALESCE(g.notas, ''))
+          LIKE LOWER($${values.length})
+      )
+    `)
+  }
+
+  return {
+    from: `
+      FROM public.cartera_gestiones g
+      INNER JOIN public.cartera_cuentas c
+        ON c.id = g.cuenta_id
+      LEFT JOIN public.cartera_snapshots s
+        ON s.cuenta_id = c.id
+        AND s.importacion_id = c.ultima_importacion_id
+      LEFT JOIN public.cartera_asignaciones a
+        ON a.cuenta_id = c.id
+        AND a.activa = TRUE
+      LEFT JOIN public.usuarios gestor
+        ON gestor.id = g.usuario_id
+      INNER JOIN public.crm_origenes o
+        ON o.id = c.origen_id
+        AND o.empresa_id = c.empresa_id
+    `,
+    where: `
+      WHERE ${conditions.join('\n        AND ')}
+    `,
+    values
+  }
+}
+
+async function listPortfolioManagements({
+  pool,
+  usuario,
+  query = {}
+}) {
+  if (!pool || typeof pool.query !== 'function') {
+    throw new CarteraReadError(
+      'CARTERA_POOL_INVALID',
+      'La conexión de datos no es válida',
+      500
+    )
+  }
+
+  const scope = resolveAccessScope(usuario)
+  const filters = normalizeManagementFilters(query)
+  const origin = await resolvePortfolioOrigin({
+    pool,
+    scope,
+    originId: filters.originId
+  })
+  const statement = buildManagementListStatement({
+    filters,
+    scope
+  })
+
+  const countResult = await pool.query(
+    `
+    SELECT COUNT(*) AS total
+    ${statement.from}
+    ${statement.where}
+    `,
+    statement.values
+  )
+  const total = Number(countResult.rows[0]?.total || 0)
+  const listValues = [
+    ...statement.values,
+    filters.limit,
+    (filters.page - 1) * filters.limit
+  ]
+  const limitPlaceholder = `$${statement.values.length + 1}`
+  const offsetPlaceholder = `$${statement.values.length + 2}`
+
+  const result = await pool.query(
+    `
+    SELECT
+      g.id,
+      g.cuenta_id,
+      g.tipificacion_id,
+      g.tipificacion_codigo,
+      g.tipificacion_nombre,
+      g.prioridad,
+      g.estado_resultante,
+      g.codigo_resultado,
+      g.canal,
+      g.telefono_contactado,
+      g.persona_contactada,
+      g.relacion_contacto,
+      g.promesa_monto,
+      g.promesa_fecha,
+      g.promesa_estado,
+      g.proximo_seguimiento_at,
+      g.seguimiento_estado,
+      g.notas,
+      g.evidencia,
+      g.creada_at,
+      g.usuario_id AS gestor_id,
+      gestor.nombre AS gestor_nombre,
+      c.origen_id,
+      o.nombre AS origen_nombre,
+      c.id_campania,
+      c.id_cliente,
+      c.folio,
+      s.nombre AS cliente_nombre
+    ${statement.from}
+    ${statement.where}
+    ORDER BY
+      g.creada_at DESC,
+      g.id DESC
+    LIMIT ${limitPlaceholder}
+    OFFSET ${offsetPlaceholder}
+    `,
+    listValues
+  )
+
+  return {
+    data: result.rows,
+    origin,
+    pagination: {
+      page: filters.page,
+      limit: filters.limit,
+      total,
+      totalPages: total === 0
+        ? 0
+        : Math.ceil(total / filters.limit)
+    }
+  }
+}
+
 function buildSummaryStatement(
   scope,
   originId = null
@@ -967,10 +1235,30 @@ async function getPortfolioAccount({
       h.valor_nuevo,
       h.creada_at,
       h.usuario_id,
-      u.nombre AS usuario_nombre
+      u.nombre AS usuario_nombre,
+      h.gestion_id,
+      g.tipificacion_id,
+      g.tipificacion_codigo,
+      g.tipificacion_nombre,
+      g.prioridad,
+      g.estado_resultante,
+      g.codigo_resultado,
+      g.canal,
+      g.telefono_contactado,
+      g.persona_contactada,
+      g.relacion_contacto,
+      g.promesa_monto,
+      g.promesa_fecha,
+      g.promesa_estado,
+      g.proximo_seguimiento_at,
+      g.seguimiento_estado,
+      g.evidencia
     FROM public.cartera_historial h
     LEFT JOIN public.usuarios u
       ON u.id = h.usuario_id
+    LEFT JOIN public.cartera_gestiones g
+      ON g.id = h.gestion_id
+      AND g.cuenta_id = h.cuenta_id
     WHERE h.cuenta_id = $1
     ORDER BY h.creada_at DESC
     LIMIT 50
@@ -1075,15 +1363,18 @@ async function listPortfolioExecutives({
 module.exports = {
   CarteraReadError,
   buildListStatement,
+  buildManagementListStatement,
   buildSummaryStatement,
   getPortfolioAccount,
   getPortfolioSummary,
   isValidIsoDate,
   listPortfolioExecutives,
+  listPortfolioManagements,
   listPortfolioOrigins,
   listPortfolio,
   normalizeBigintId,
   normalizeListFilters,
+  normalizeManagementFilters,
   normalizeOptionalBigintId,
   resolveAccessScope,
   resolvePortfolioOrigin

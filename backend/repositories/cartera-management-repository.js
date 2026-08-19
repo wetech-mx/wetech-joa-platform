@@ -12,6 +12,23 @@ const ALLOWED_STATES = new Set(
   Object.values(CARTERA_ESTADOS)
 )
 
+const MANAGEMENT_CHANNELS = new Set([
+  'telefono',
+  'whatsapp',
+  'correo',
+  'sms',
+  'visita',
+  'otro'
+])
+
+const MANAGEMENT_RELATIONSHIPS = new Set([
+  'titular',
+  'familiar',
+  'referencia',
+  'tercero',
+  'sin_contacto'
+])
+
 class CarteraManagementError extends Error {
   constructor(
     code,
@@ -122,6 +139,297 @@ function normalizeState(value) {
   return state
 }
 
+function normalizeEnum(
+  value,
+  {
+    allowed,
+    code,
+    message
+  }
+) {
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (!allowed.has(normalized)) {
+    throw new CarteraManagementError(
+      code,
+      message
+    )
+  }
+
+  return normalized
+}
+
+function normalizeExternalCode(value) {
+  const code = normalizeOptionalText(
+    value,
+    {
+      field: 'código de resultado',
+      maximum: 30
+    }
+  )
+
+  if (!code) {
+    return null
+  }
+
+  const normalized = code.toUpperCase()
+
+  if (!/^[A-Z0-9][A-Z0-9_-]{0,29}$/.test(normalized)) {
+    throw new CarteraManagementError(
+      'CARTERA_MANAGEMENT_CODE_INVALID',
+      'El código de resultado no es válido'
+    )
+  }
+
+  return normalized
+}
+
+function normalizeMoney(value) {
+  const text = String(value ?? '').trim()
+
+  if (!/^(?:0|[1-9]\d{0,15})(?:\.\d{1,2})?$/.test(text)) {
+    throw new CarteraManagementError(
+      'CARTERA_PROMISE_AMOUNT_INVALID',
+      'El monto de la promesa no es válido'
+    )
+  }
+
+  const [integer, decimals = ''] = text.split('.')
+  const normalized = `${integer}.${decimals.padEnd(2, '0')}`
+
+  if (normalized === '0.00') {
+    throw new CarteraManagementError(
+      'CARTERA_PROMISE_AMOUNT_INVALID',
+      'El monto de la promesa debe ser mayor a cero'
+    )
+  }
+
+  return normalized
+}
+
+function normalizeIsoDate(value, field) {
+  const text = String(value ?? '').trim()
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+
+  if (!match) {
+    throw new CarteraManagementError(
+      'CARTERA_DATE_INVALID',
+      `${field} no es una fecha válida`
+    )
+  }
+
+  const date = new Date(`${text}T00:00:00.000Z`)
+
+  if (
+    Number.isNaN(date.getTime())
+    || date.toISOString().slice(0, 10) !== text
+  ) {
+    throw new CarteraManagementError(
+      'CARTERA_DATE_INVALID',
+      `${field} no es una fecha válida`
+    )
+  }
+
+  return text
+}
+
+function mexicoDate(now) {
+  const parts = new Intl.DateTimeFormat(
+    'en-CA',
+    {
+      timeZone: 'America/Mexico_City',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }
+  ).formatToParts(now)
+
+  const values = Object.fromEntries(
+    parts.map(part => [part.type, part.value])
+  )
+
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+function normalizeFutureDateTime(value, now) {
+  if (value === undefined || value === null || value === '') {
+    return null
+  }
+
+  const date = new Date(value)
+
+  if (
+    Number.isNaN(date.getTime())
+    || date.getTime() <= now.getTime()
+  ) {
+    throw new CarteraManagementError(
+      'CARTERA_FOLLOW_UP_INVALID',
+      'El próximo seguimiento debe ser una fecha futura'
+    )
+  }
+
+  return date.toISOString()
+}
+
+function normalizeTypification(row) {
+  if (
+    !row
+    || !ALLOWED_STATES.has(row.estado_resultante)
+    || !/^[a-z0-9][a-z0-9_]{0,99}$/.test(
+      String(row.codigo ?? '')
+    )
+    || !String(row.nombre ?? '').trim()
+    || String(row.nombre).trim().length > 150
+    || !Number.isInteger(Number(row.prioridad))
+    || Number(row.prioridad) < 1
+    || Number(row.prioridad) > 4
+  ) {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_INVALID',
+      'La tipificación configurada no es válida',
+      500
+    )
+  }
+
+  return {
+    id: normalizeBigintId(row.id, 'tipificacion_id'),
+    code: row.codigo,
+    name: String(row.nombre).trim(),
+    priority: Number(row.prioridad),
+    state: row.estado_resultante,
+    requiresPromise: row.requiere_promesa === true,
+    requiresFollowUp: row.requiere_seguimiento === true,
+    closesAccount: row.cierra_cuenta === true
+  }
+}
+
+function normalizePortfolioManagement(
+  input = {},
+  typificationRow,
+  now = new Date()
+) {
+  const typification = normalizeTypification(
+    typificationRow
+  )
+  const channel = normalizeEnum(
+    input.canal,
+    {
+      allowed: MANAGEMENT_CHANNELS,
+      code: 'CARTERA_MANAGEMENT_CHANNEL_INVALID',
+      message: 'El canal de contacto no es válido'
+    }
+  )
+  const relationship = normalizeEnum(
+    input.relacion_contacto,
+    {
+      allowed: MANAGEMENT_RELATIONSHIPS,
+      code: 'CARTERA_MANAGEMENT_RELATIONSHIP_INVALID',
+      message: 'La relación de contacto no es válida'
+    }
+  )
+  const phone = normalizeOptionalText(
+    input.telefono_contactado,
+    {
+      field: 'teléfono contactado',
+      maximum: 100
+    }
+  )
+
+  if (
+    ['telefono', 'whatsapp', 'sms'].includes(channel)
+    && !phone
+  ) {
+    throw new CarteraManagementError(
+      'CARTERA_MANAGEMENT_PHONE_REQUIRED',
+      'El teléfono utilizado es obligatorio para ese canal'
+    )
+  }
+
+  const notes = normalizeOptionalText(
+    input.notas,
+    {
+      field: 'notas',
+      maximum: 2000
+    }
+  )
+  const evidence = normalizeOptionalText(
+    input.evidencia,
+    {
+      field: 'evidencia',
+      maximum: 1000
+    }
+  )
+
+  if (!notes && !evidence) {
+    throw new CarteraManagementError(
+      'CARTERA_MANAGEMENT_CONTENT_REQUIRED',
+      'Debe registrar una nota o referencia de evidencia'
+    )
+  }
+
+  let promiseAmount = null
+  let promiseDate = null
+
+  if (typification.requiresPromise) {
+    promiseAmount = normalizeMoney(input.promesa_monto)
+    promiseDate = normalizeIsoDate(
+      input.promesa_fecha,
+      'La fecha de promesa'
+    )
+
+    if (promiseDate < mexicoDate(now)) {
+      throw new CarteraManagementError(
+        'CARTERA_PROMISE_DATE_PAST',
+        'La fecha de promesa no puede estar vencida'
+      )
+    }
+  } else if (
+    input.promesa_monto
+    || input.promesa_fecha
+  ) {
+    throw new CarteraManagementError(
+      'CARTERA_PROMISE_UNEXPECTED',
+      'La tipificación seleccionada no permite registrar una promesa'
+    )
+  }
+
+  const nextFollowUp = normalizeFutureDateTime(
+    input.proximo_seguimiento_at,
+    now
+  )
+
+  if (typification.requiresFollowUp && !nextFollowUp) {
+    throw new CarteraManagementError(
+      'CARTERA_FOLLOW_UP_REQUIRED',
+      'La tipificación requiere programar un próximo seguimiento'
+    )
+  }
+
+  return {
+    typification,
+    externalCode: normalizeExternalCode(
+      input.codigo_resultado
+    ),
+    channel,
+    phone,
+    contactedPerson: normalizeOptionalText(
+      input.persona_contactada,
+      {
+        field: 'persona contactada',
+        maximum: 200
+      }
+    ),
+    relationship,
+    promiseAmount,
+    promiseDate,
+    nextFollowUp,
+    notes,
+    evidence
+  }
+}
+
 function resolveActor(usuario = {}) {
   const scope = resolveAccessScope(usuario)
   const actorId = normalizeUserId(
@@ -136,6 +444,50 @@ function resolveActor(usuario = {}) {
       usuario.rol === ROLES.ADMIN
       || usuario.rol === ROLES.SUPER_ADMIN
     )
+  }
+}
+
+async function listPortfolioTypifications({
+  pool,
+  usuario
+}) {
+  if (!pool || typeof pool.query !== 'function') {
+    throw new CarteraManagementError(
+      'CARTERA_POOL_INVALID',
+      'La conexión de datos no es válida',
+      500
+    )
+  }
+
+  const scope = resolveAccessScope(usuario)
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      codigo,
+      nombre,
+      prioridad,
+      estado_resultante,
+      contacto_efectivo,
+      requiere_promesa,
+      requiere_seguimiento,
+      cierra_cuenta,
+      orden
+    FROM public.cartera_tipificaciones
+    WHERE
+      empresa_id = $1
+      AND activa = TRUE
+    ORDER BY
+      prioridad,
+      orden,
+      nombre,
+      id
+    `,
+    [scope.empresaId]
+  )
+
+  return {
+    data: result.rows
   }
 }
 
@@ -614,15 +966,234 @@ async function reassignPortfolioAccount({
   )
 }
 
+async function registerPortfolioManagement({
+  pool,
+  usuario,
+  accountId,
+  input,
+  now = new Date()
+}) {
+  const id = normalizeBigintId(accountId, 'id')
+  const actor = resolveActor(usuario)
+  const typificationId = normalizeBigintId(
+    input?.tipificacion_id,
+    'tipificacion_id'
+  )
+
+  return withTransaction(
+    pool,
+    async client => {
+      const account = await lockAccessibleAccount(
+        client,
+        {
+          accountId: id,
+          actor
+        }
+      )
+
+      const configured = await client.query(
+        `
+        SELECT
+          id,
+          codigo,
+          nombre,
+          prioridad,
+          estado_resultante,
+          requiere_promesa,
+          requiere_seguimiento,
+          cierra_cuenta
+        FROM public.cartera_tipificaciones
+        WHERE
+          id = $1
+          AND empresa_id = $2
+          AND activa = TRUE
+        FOR SHARE
+        `,
+        [typificationId, actor.empresaId]
+      )
+
+      if (!configured.rows[0]) {
+        throw new CarteraManagementError(
+          'CARTERA_TYPIFICATION_NOT_FOUND',
+          'La tipificación no existe o está inactiva',
+          404
+        )
+      }
+
+      const management = normalizePortfolioManagement(
+        input,
+        configured.rows[0],
+        now
+      )
+
+      if (
+        account.estado_gestion
+        !== management.typification.state
+      ) {
+        await client.query(
+          `
+          UPDATE public.cartera_cuentas
+          SET
+            estado_gestion = $2,
+            actualizada_at = NOW()
+          WHERE id = $1
+          `,
+          [id, management.typification.state]
+        )
+      }
+
+      const created = await client.query(
+        `
+        INSERT INTO public.cartera_gestiones
+        (
+          empresa_id,
+          cuenta_id,
+          tipificacion_id,
+          usuario_id,
+          tipificacion_codigo,
+          tipificacion_nombre,
+          prioridad,
+          estado_resultante,
+          codigo_resultado,
+          canal,
+          telefono_contactado,
+          persona_contactada,
+          relacion_contacto,
+          promesa_monto,
+          promesa_fecha,
+          promesa_estado,
+          proximo_seguimiento_at,
+          seguimiento_estado,
+          notas,
+          evidencia
+        )
+        VALUES
+        (
+          $1, $2, $3, $4, $5, $6, $7,
+          $8, $9, $10, $11, $12, $13, $14,
+          $15, $16, $17, $18, $19, $20
+        )
+        RETURNING
+          id,
+          empresa_id,
+          cuenta_id,
+          tipificacion_id,
+          usuario_id,
+          tipificacion_codigo,
+          tipificacion_nombre,
+          prioridad,
+          estado_resultante,
+          codigo_resultado,
+          canal,
+          telefono_contactado,
+          persona_contactada,
+          relacion_contacto,
+          promesa_monto,
+          promesa_fecha,
+          promesa_estado,
+          proximo_seguimiento_at,
+          seguimiento_estado,
+          notas,
+          evidencia,
+          creada_at
+        `,
+        [
+          actor.empresaId,
+          id,
+          management.typification.id,
+          actor.actorId,
+          management.typification.code,
+          management.typification.name,
+          management.typification.priority,
+          management.typification.state,
+          management.externalCode,
+          management.channel,
+          management.phone,
+          management.contactedPerson,
+          management.relationship,
+          management.promiseAmount,
+          management.promiseDate,
+          management.promiseAmount ? 'pendiente' : null,
+          management.nextFollowUp,
+          management.nextFollowUp ? 'pendiente' : null,
+          management.notes,
+          management.evidence
+        ]
+      )
+
+      const record = created.rows[0]
+
+      await client.query(
+        `
+        INSERT INTO public.cartera_historial
+        (
+          cuenta_id,
+          gestion_id,
+          usuario_id,
+          evento,
+          detalle,
+          valor_anterior,
+          valor_nuevo
+        )
+        VALUES
+        (
+          $1,
+          $2,
+          $3,
+          'gestion_registrada',
+          $4,
+          $5::JSONB,
+          $6::JSONB
+        )
+        `,
+        [
+          id,
+          record.id,
+          actor.actorId,
+          management.notes,
+          JSON.stringify({
+            estado: account.estado_gestion
+          }),
+          JSON.stringify({
+            estado: management.typification.state,
+            tipificacion: management.typification.code,
+            tipificacion_nombre: management.typification.name,
+            prioridad: management.typification.priority,
+            codigo_resultado: management.externalCode,
+            promesa_monto: management.promiseAmount,
+            promesa_fecha: management.promiseDate,
+            proximo_seguimiento_at:
+              management.nextFollowUp
+          })
+        ]
+      )
+
+      return {
+        management: record,
+        account: {
+          id,
+          estado_gestion: management.typification.state
+        }
+      }
+    }
+  )
+}
+
 module.exports = {
   ALLOWED_STATES,
   CarteraManagementError,
+  MANAGEMENT_CHANNELS,
+  MANAGEMENT_RELATIONSHIPS,
   addPortfolioNote,
+  listPortfolioTypifications,
   lockAccessibleAccount,
   normalizeRequiredText,
+  normalizePortfolioManagement,
+  normalizeTypification,
   normalizeState,
   normalizeUserId,
   reassignPortfolioAccount,
+  registerPortfolioManagement,
   resolveActor,
   updatePortfolioState,
   withTransaction

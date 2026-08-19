@@ -5,6 +5,7 @@ const {
   getPortfolioAccount,
   getPortfolioSummary,
   listPortfolioExecutives,
+  listPortfolioManagements,
   listPortfolioOrigins,
   listPortfolio
 } = require('../repositories/cartera-read-repository')
@@ -12,7 +13,9 @@ const {
 const {
   CarteraManagementError,
   addPortfolioNote,
+  listPortfolioTypifications,
   reassignPortfolioAccount,
+  registerPortfolioManagement,
   updatePortfolioState
 } = require(
   '../repositories/cartera-management-repository'
@@ -131,6 +134,57 @@ async function obtenerEjecutivosCartera(
   }
 }
 
+async function obtenerGestionesCartera(
+  req,
+  res
+) {
+  try {
+    const result = await listPortfolioManagements({
+      pool,
+      usuario: req.usuario,
+      query: req.query
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function obtenerTipificacionesCartera(
+  req,
+  res
+) {
+  try {
+    const result = await listPortfolioTypifications({
+      pool,
+      usuario: req.usuario
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function registrarGestionCartera(
+  req,
+  res
+) {
+  try {
+    const result = await registerPortfolioManagement({
+      pool,
+      usuario: req.usuario,
+      accountId: req.params.id,
+      input: req.body
+    })
+
+    return res.status(201).json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
 async function agregarNotaCartera(
   req,
   res
@@ -193,8 +247,11 @@ module.exports = {
   obtenerCartera,
   obtenerCuentaCartera,
   obtenerEjecutivosCartera,
+  obtenerGestionesCartera,
   obtenerOrigenesCartera,
   obtenerResumenCartera,
+  obtenerTipificacionesCartera,
   reasignarCuentaCartera,
+  registrarGestionCartera,
   respondWithError
 }
