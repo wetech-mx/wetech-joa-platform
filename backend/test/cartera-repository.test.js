@@ -251,8 +251,12 @@ test('rechaza parámetros de persistencia incompletos', () => {
   )
 })
 
-test('distribuye 32 campos de snapshot más dos identificadores', () => {
-  assert.equal(SNAPSHOT_FIELDS.length, 32)
+test('distribuye 32 campos normalizados y el origen completo', () => {
+  assert.equal(SNAPSHOT_FIELDS.length, 33)
+  assert.deepEqual(
+    SNAPSHOT_FIELDS.at(-1),
+    ['datos_origen', 'rawData']
+  )
 })
 
 test('importa una cuenta nueva en una transacción', async () => {

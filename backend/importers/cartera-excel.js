@@ -7,6 +7,118 @@ const {
   HEADERS
 } = require('../integrations/banco-azteca/excel')
 
+const SCL_HEADERS = Object.freeze([
+  'CLIENTE_UNICO',
+  'NOMBRE_CTE',
+  'GENERO_CLIENTE',
+  'EDAD_CLIENTE',
+  'OCUPACION',
+  'DIRECCION_CTE',
+  'NUM_EXT_CTE',
+  'NUM_INT_CTE',
+  'CP_CTE',
+  'COLONIA_CTE',
+  'POBLACION_CTE',
+  'ESTADO_CTE',
+  'TERRITORIO',
+  'TERRITORIAL',
+  'ZONA',
+  'ZONAL',
+  'NOMBRE_DESPACHO',
+  'GERENCIA',
+  'FECHA_ASIGNACION',
+  'DIAS_ASIGNACION',
+  'REFERENCIAS_DOMICILIO',
+  'CLASIFICACION_CTE',
+  'DIQUE',
+  'ATRASO_MAXIMO',
+  'DIAS_ATRASO',
+  'SALDO',
+  'MORATORIOS',
+  'SALDO_TOTAL',
+  'SALDO ATRASADO',
+  'SALDO REQUERIDO',
+  'PAGO_NORMAL',
+  'PRODUCTO',
+  'ESTRATEGIA',
+  'FECHA_ULTIMO_PAGO',
+  'IMP_ULTIMO_PAGO',
+  'CALLE_EMPLEO',
+  'NUM_EXT_EMPLEO',
+  'NUM_INT_EMPLEO',
+  'COLONIA_EMPLEO',
+  'POBLACION_EMPLEO',
+  'ESTADO_EMPLEO',
+  'NOMBRE_AVAL',
+  'TEL_AVAL',
+  'CALLE_AVAL',
+  'NUM_EXT_AVAL',
+  'COLONIA_AVAL',
+  'CP_AVAL',
+  'POBLACION_AVAL',
+  'ESTADO_AVAL',
+  'FIDIAPAGO',
+  'TELEFONO1',
+  'TELEFONO2',
+  'TELEFONO3',
+  'TELEFONO4',
+  'TIPOTEL1',
+  'TIPOTEL2',
+  'TIPOTEL3',
+  'TIPOTEL4',
+  'LATITUD',
+  'LONGITUD',
+  'DESPACHO_GESTIONO',
+  'ULTIMA_GESTION',
+  'GESTION_DESC',
+  'CAMPANIA_RELAMPAGO',
+  'CAMPANIA',
+  'PREVENTA',
+  'ID_GRUPO',
+  'GRUPO_MAZ',
+  'CLAVE_SPEI',
+  'PAGOS_CLIENTE',
+  'MONTO_PAGOS',
+  'GESTORES',
+  'FOLIO_PLAN',
+  'SEGMENTO_GENERACION',
+  'ESTATUS_PLAN',
+  'SEMANAS_ATRASO',
+  'ATRASO',
+  'GENERACION_PLAN',
+  'CANCELACION_CUMPLIMIENTO_PLAN',
+  'ULTIMO_ESTATUS',
+  'EMPLEADO',
+  'CANAL',
+  'ABONO_SEMANAL',
+  'PLAZO',
+  'MONTO_ABONADO',
+  'MONTO_PLAN',
+  'ENGANCHE',
+  'PAGOS_RECIBIDOS',
+  'SALDO_ANTES_DEL_PLAN',
+  'SALDO_ATRASADO_ANTES_PLAN',
+  'MORATORIOS_ANTES_PLAN',
+  'ESTATUS_PROMESA_PAGO',
+  'MONTO_PROMESA_PAGO',
+  'TIPO_QUEJA'
+])
+
+const SOURCE_EMPTY_VALUES = new Set([
+  '',
+  'N/A',
+  'NA',
+  'N.D.',
+  'ND',
+  'NULL',
+  'SIN DATO',
+  'SIN DATOS',
+  'SIN INFORMACION',
+  'SIN INFORMACIÓN',
+  'NO APLICA',
+  '-'
+])
+
 class CarteraImportError extends Error {
   constructor(code, message, details = {}) {
     super(message)
@@ -113,21 +225,112 @@ function validateHeaders(actualHeaders) {
   return true
 }
 
+function validateSclHeaders(actualHeaders) {
+  if (!Array.isArray(actualHeaders)) {
+    throw new CarteraImportError(
+      'SCL_IMPORT_HEADERS_INVALID',
+      'No fue posible leer los encabezados de la descarga SCL'
+    )
+  }
+
+  if (actualHeaders.length !== SCL_HEADERS.length) {
+    throw new CarteraImportError(
+      'SCL_IMPORT_HEADER_COUNT',
+      `La descarga SCL debe contener exactamente ${SCL_HEADERS.length} campos`,
+      {
+        expected: SCL_HEADERS.length,
+        actual: actualHeaders.length
+      }
+    )
+  }
+
+  for (let index = 0; index < SCL_HEADERS.length; index++) {
+    const expected = SCL_HEADERS[index]
+    const actual = actualHeaders[index]
+
+    if (actual !== expected) {
+      throw new CarteraImportError(
+        'SCL_IMPORT_HEADER_MISMATCH',
+        `El campo ${index + 1} debe ser "${expected}"`,
+        {
+          column: index + 1,
+          expected,
+          actual
+        }
+      )
+    }
+  }
+
+  return true
+}
+
+function isSclPipeWorkbook(rows) {
+  return (
+    Array.isArray(rows)
+    && rows.length > 0
+    && Array.isArray(rows[0])
+    && rows[0].length === 1
+    && typeof rows[0][0] === 'string'
+    && rows[0][0].includes('|')
+  )
+}
+
+function expandSclPipeRows(rows) {
+  if (!isSclPipeWorkbook(rows)) {
+    throw new CarteraImportError(
+      'SCL_IMPORT_FORMAT_INVALID',
+      'La descarga SCL no contiene registros separados por |'
+    )
+  }
+
+  return rows.map((row, index) => {
+    const fields = String(row[0] ?? '').split('|')
+
+    if (fields.length !== SCL_HEADERS.length) {
+      throw new CarteraImportError(
+        'SCL_IMPORT_ROW_FIELD_COUNT',
+        `La fila ${index + 1} debe contener ${SCL_HEADERS.length} campos separados por |`,
+        {
+          rowNumber: index + 1,
+          expected: SCL_HEADERS.length,
+          actual: fields.length
+        }
+      )
+    }
+
+    return fields
+  })
+}
+
+function resolvePortfolioDate(
+  filePath,
+  explicitDate
+) {
+  if (explicitDate !== undefined && explicitDate !== null) {
+    const date = String(explicitDate).trim()
+
+    if (!isValidIsoDate(date)) {
+      throw new CarteraImportError(
+        'BAZ_IMPORT_DATE_INVALID',
+        'La fecha indicada para la cartera no es válida',
+        {
+          date
+        }
+      )
+    }
+
+    return date
+  }
+
+  return parsePortfolioDate(filePath)
+}
+
 function isNonEmptyRow(row) {
   return row.some(value => (
     value !== null
     && value !== undefined
     && String(value).trim() !== ''
   ))
-}
-
-function rowToObject(row) {
-  return Object.fromEntries(
-    HEADERS.map((header, index) => [
-      header,
-      row[index] ?? ''
-    ])
-  )
 }
 
 function isBlank(value) {
@@ -283,6 +486,169 @@ function normalizeDate(value, field, rowNumber) {
   return normalized
 }
 
+function normalizeSourceText(value) {
+  if (isBlank(value)) {
+    return null
+  }
+
+  const text = String(value).trim()
+
+  return SOURCE_EMPTY_VALUES.has(text.toUpperCase())
+    ? null
+    : text
+}
+
+function normalizeSourcePhone(value) {
+  const text = normalizeSourceText(value)
+
+  if (
+    text === null
+    || /^0+$/.test(text.replace(/\D/g, ''))
+  ) {
+    return null
+  }
+
+  return text
+}
+
+function normalizeSourceInteger(
+  value,
+  field,
+  rowNumber,
+  options
+) {
+  const text = normalizeSourceText(value)
+
+  return text === null
+    ? null
+    : normalizeInteger(
+      text.replace(/,/g, ''),
+      field,
+      rowNumber,
+      options
+    )
+}
+
+function normalizeSourceDecimal(
+  value,
+  field,
+  rowNumber
+) {
+  const text = normalizeSourceText(value)
+
+  return text === null
+    ? null
+    : normalizeDecimal(text, field, rowNumber)
+}
+
+function transformSclPortfolioRow(
+  row,
+  rowNumber = 2
+) {
+  const idCliente = normalizeRequiredIdentifier(
+    normalizeSourceText(row.CLIENTE_UNICO),
+    'CLIENTE_UNICO',
+    rowNumber
+  )
+  const idCampania = (
+    normalizeSourceText(row.CAMPANIA)
+    || normalizeSourceText(row.SEGMENTO_GENERACION)
+    || 'SCL'
+  )
+  const folio = idCliente
+
+  return {
+    identity: {
+      idCampania,
+      idCliente,
+      folio,
+      key: [
+        idCampania,
+        idCliente,
+        folio
+      ].join('\u0000')
+    },
+    snapshot: {
+      nombre: normalizeSourceText(row.NOMBRE_CTE),
+      idGenero: normalizeSourceText(row.GENERO_CLIENTE),
+      edad: normalizeSourceInteger(
+        row.EDAD_CLIENTE,
+        'EDAD_CLIENTE',
+        rowNumber,
+        {
+          min: 0,
+          max: 130
+        }
+      ),
+      idNivelRiesgo: normalizeSourceText(
+        row.CLASIFICACION_CTE
+      ),
+      medioContactoSugerido: (
+        normalizeSourceText(row.ESTRATEGIA)
+        || normalizeSourceText(row.CANAL)
+      ),
+      telefono1: normalizeSourcePhone(row.TELEFONO1),
+      tipoTelefono1: normalizeSourceText(row.TIPOTEL1),
+      telefono2: normalizeSourcePhone(row.TELEFONO2),
+      tipoTelefono2: normalizeSourceText(row.TIPOTEL2),
+      telefono3: normalizeSourcePhone(row.TELEFONO3),
+      tipoTelefono3: normalizeSourceText(row.TIPOTEL3),
+      telefono4: normalizeSourcePhone(row.TELEFONO4),
+      tipoTelefono4: normalizeSourceText(row.TIPOTEL4),
+      correo1: null,
+      correo2: null,
+      idPais: 'MX',
+      idCanal: normalizeSourceText(row.CANAL),
+      idSucursal: (
+        normalizeSourceText(row.ZONA)
+        || normalizeSourceText(row.TERRITORIO)
+      ),
+      folio,
+      semanasAtraso: normalizeSourceInteger(
+        row.SEMANAS_ATRASO,
+        'SEMANAS_ATRASO',
+        rowNumber
+      ),
+      diasAtraso: normalizeSourceInteger(
+        row.DIAS_ATRASO,
+        'DIAS_ATRASO',
+        rowNumber
+      ),
+      diaPago: normalizeSourceText(row.FIDIAPAGO),
+      saldo: normalizeSourceDecimal(
+        row.SALDO_TOTAL,
+        'SALDO_TOTAL',
+        rowNumber
+      ),
+      pagoRequerido: normalizeSourceDecimal(
+        row['SALDO REQUERIDO'],
+        'SALDO REQUERIDO',
+        rowNumber
+      ),
+      pagoMinimo: normalizeSourceDecimal(
+        row.PAGO_NORMAL,
+        'PAGO_NORMAL',
+        rowNumber
+      ),
+      pagoNoGeneraIntereses: null,
+      abonoPuntual: null,
+      abonoSemanal: normalizeSourceDecimal(
+        row.ABONO_SEMANAL,
+        'ABONO_SEMANAL',
+        rowNumber
+      ),
+      fechaProximaPago: null,
+      fechaVencimiento: null,
+      producto: normalizeSourceText(row.PRODUCTO),
+      codigoPostal: normalizeSourceText(row.CP_CTE)
+    },
+    rawData: {
+      ...row
+    },
+    rowNumber
+  }
+}
+
 function transformPortfolioRow(row, rowNumber = 2) {
   const idCampania = normalizeRequiredIdentifier(
     row.IdCampaña,
@@ -414,13 +780,16 @@ function transformPortfolioRow(row, rowNumber = 2) {
   }
 }
 
-function transformPortfolioRows(rows) {
+function transformRowsWith(
+  rows,
+  transformer
+) {
   const transformed = []
   const identities = new Map()
 
   for (let index = 0; index < rows.length; index++) {
     const rowNumber = index + 2
-    const record = transformPortfolioRow(
+    const record = transformer(
       rows[index],
       rowNumber
     )
@@ -452,8 +821,24 @@ function transformPortfolioRows(rows) {
   return transformed
 }
 
-async function readPortfolioWorkbook(filePath) {
-  const date = parsePortfolioDate(filePath)
+function transformPortfolioRows(rows) {
+  return transformRowsWith(
+    rows,
+    transformPortfolioRow
+  )
+}
+
+function transformSclPortfolioRows(rows) {
+  return transformRowsWith(
+    rows,
+    transformSclPortfolioRow
+  )
+}
+
+async function readPortfolioWorkbook(
+  filePath,
+  options = {}
+) {
   const buffer = await fs.promises.readFile(filePath)
   let workbook
 
@@ -481,7 +866,7 @@ async function readPortfolioWorkbook(filePath) {
     )
   }
 
-  const rows = XLSX.utils.sheet_to_json(
+  const workbookRows = XLSX.utils.sheet_to_json(
     workbook.Sheets[sheetName],
     {
       header: 1,
@@ -491,14 +876,31 @@ async function readPortfolioWorkbook(filePath) {
     }
   )
 
-  if (rows.length === 0) {
+  if (workbookRows.length === 0) {
     throw new CarteraImportError(
       'BAZ_IMPORT_WORKBOOK_EMPTY',
       'El Excel no contiene encabezados'
     )
   }
 
-  validateHeaders(rows[0])
+  const isScl = isSclPipeWorkbook(workbookRows)
+  const rows = isScl
+    ? expandSclPipeRows(workbookRows)
+    : workbookRows
+  const headers = isScl
+    ? SCL_HEADERS
+    : HEADERS
+
+  if (isScl) {
+    validateSclHeaders(rows[0])
+  } else {
+    validateHeaders(rows[0])
+  }
+
+  const date = resolvePortfolioDate(
+    filePath,
+    options.date
+  )
 
   const dataRows = rows
     .slice(1)
@@ -511,15 +913,26 @@ async function readPortfolioWorkbook(filePath) {
     )
   }
 
-  const rawRows = dataRows.map(rowToObject)
+  const rawRows = dataRows.map(row => (
+    Object.fromEntries(
+      headers.map((header, index) => [
+        header,
+        row[index] ?? ''
+      ])
+    )
+  ))
+  const records = isScl
+    ? transformSclPortfolioRows(rawRows)
+    : transformPortfolioRows(rawRows)
 
   return {
     date,
     fileName: path.basename(filePath),
     sha256: checksumFor(buffer),
-    headers: [...HEADERS],
+    format: isScl ? 'scl_pipe_v1' : 'normalized_v1',
+    headers: [...headers],
     rows: rawRows,
-    records: transformPortfolioRows(rawRows),
+    records,
     totalRows: dataRows.length
   }
 }
@@ -533,7 +946,14 @@ module.exports = {
   normalizeInteger,
   parsePortfolioDate,
   readPortfolioWorkbook,
+  resolvePortfolioDate,
+  SCL_HEADERS,
+  expandSclPipeRows,
+  isSclPipeWorkbook,
   transformPortfolioRow,
   transformPortfolioRows,
-  validateHeaders
+  transformSclPortfolioRow,
+  transformSclPortfolioRows,
+  validateHeaders,
+  validateSclHeaders
 }

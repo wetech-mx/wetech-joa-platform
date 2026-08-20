@@ -47,6 +47,135 @@ function DetailItem({
   )
 }
 
+const SOURCE_DETAIL_SECTIONS = [
+  {
+    title: 'Cliente',
+    fields: [
+      'CLIENTE_UNICO', 'NOMBRE_CTE', 'GENERO_CLIENTE',
+      'EDAD_CLIENTE', 'OCUPACION', 'CLASIFICACION_CTE'
+    ]
+  },
+  {
+    title: 'Domicilio',
+    fields: [
+      'DIRECCION_CTE', 'NUM_EXT_CTE', 'NUM_INT_CTE',
+      'CP_CTE', 'COLONIA_CTE', 'POBLACION_CTE',
+      'ESTADO_CTE', 'REFERENCIAS_DOMICILIO',
+      'LATITUD', 'LONGITUD'
+    ]
+  },
+  {
+    title: 'Asignación y segmentación',
+    fields: [
+      'TERRITORIO', 'TERRITORIAL', 'ZONA', 'ZONAL',
+      'NOMBRE_DESPACHO', 'GERENCIA', 'FECHA_ASIGNACION',
+      'DIAS_ASIGNACION', 'DIQUE', 'ATRASO_MAXIMO',
+      'DIAS_ATRASO', 'SEMANAS_ATRASO', 'ATRASO',
+      'PRODUCTO', 'ESTRATEGIA', 'SEGMENTO_GENERACION'
+    ]
+  },
+  {
+    title: 'Saldos y pagos',
+    fields: [
+      'SALDO', 'MORATORIOS', 'SALDO_TOTAL',
+      'SALDO ATRASADO', 'SALDO REQUERIDO', 'PAGO_NORMAL',
+      'FECHA_ULTIMO_PAGO', 'IMP_ULTIMO_PAGO', 'FIDIAPAGO',
+      'PAGOS_CLIENTE', 'MONTO_PAGOS', 'ABONO_SEMANAL',
+      'MONTO_ABONADO', 'PAGOS_RECIBIDOS'
+    ]
+  },
+  {
+    title: 'Empleo y aval',
+    fields: [
+      'CALLE_EMPLEO', 'NUM_EXT_EMPLEO', 'NUM_INT_EMPLEO',
+      'COLONIA_EMPLEO', 'POBLACION_EMPLEO', 'ESTADO_EMPLEO',
+      'EMPLEADO', 'NOMBRE_AVAL', 'TEL_AVAL', 'CALLE_AVAL',
+      'NUM_EXT_AVAL', 'COLONIA_AVAL', 'CP_AVAL',
+      'POBLACION_AVAL', 'ESTADO_AVAL'
+    ]
+  },
+  {
+    title: 'Teléfonos',
+    fields: [
+      'TELEFONO1', 'TIPOTEL1', 'TELEFONO2', 'TIPOTEL2',
+      'TELEFONO3', 'TIPOTEL3', 'TELEFONO4', 'TIPOTEL4'
+    ]
+  },
+  {
+    title: 'Gestión y campaña',
+    fields: [
+      'DESPACHO_GESTIONO', 'ULTIMA_GESTION', 'GESTION_DESC',
+      'CAMPANIA_RELAMPAGO', 'CAMPANIA', 'PREVENTA',
+      'ID_GRUPO', 'GRUPO_MAZ', 'CLAVE_SPEI', 'GESTORES',
+      'ULTIMO_ESTATUS', 'CANAL', 'TIPO_QUEJA'
+    ]
+  },
+  {
+    title: 'Plan y promesa de pago',
+    fields: [
+      'FOLIO_PLAN', 'ESTATUS_PLAN', 'GENERACION_PLAN',
+      'CANCELACION_CUMPLIMIENTO_PLAN', 'PLAZO', 'MONTO_PLAN',
+      'ENGANCHE', 'SALDO_ANTES_DEL_PLAN',
+      'SALDO_ATRASADO_ANTES_PLAN', 'MORATORIOS_ANTES_PLAN',
+      'ESTATUS_PROMESA_PAGO', 'MONTO_PROMESA_PAGO'
+    ]
+  }
+]
+
+function sourceLabel(field) {
+  return field
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, letter => letter.toUpperCase())
+}
+
+function hasSourceValue(value) {
+  return !(
+    value === null
+    || value === undefined
+    || String(value).trim() === ''
+  )
+}
+
+function SourceDataSection({
+  section,
+  data
+}) {
+  const fields = section.fields.filter(
+    field => Object.hasOwn(data, field)
+  )
+
+  if (fields.length === 0) {
+    return null
+  }
+
+  const available = fields.filter(
+    field => hasSourceValue(data[field])
+  ).length
+
+  return (
+    <details className="rounded-xl border bg-white">
+      <summary className="cursor-pointer px-4 py-3 font-bold">
+        {section.title}
+        <span className="ml-2 text-xs font-normal text-gray-500">
+          {available} datos disponibles
+        </span>
+      </summary>
+      <div className="grid gap-3 border-t p-4 sm:grid-cols-2">
+        {fields.map(field => (
+          <DetailItem
+            key={field}
+            label={sourceLabel(field)}
+            value={hasSourceValue(data[field])
+              ? data[field]
+              : '—'}
+          />
+        ))}
+      </div>
+    </details>
+  )
+}
+
 function emptyManagement(phone = '') {
   return {
     tipificacion_id: '',
@@ -439,6 +568,29 @@ export default function CarteraDrawer({
                   />
                 </div>
               </section>
+
+              {account.datos_origen
+                && Object.keys(account.datos_origen).length > 0
+                && (
+                  <section>
+                    <h3 className="text-lg font-bold">
+                      Expediente completo de origen
+                    </h3>
+                    <p className="mb-3 mt-1 text-sm text-gray-600">
+                      Información recibida en la descarga original,
+                      organizada sin eliminar campos.
+                    </p>
+                    <div className="space-y-3">
+                      {SOURCE_DETAIL_SECTIONS.map(section => (
+                        <SourceDataSection
+                          key={section.title}
+                          section={section}
+                          data={account.datos_origen}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
 
               <section className="rounded-2xl border border-orange-200 bg-orange-50/40 p-5">
                 <h3 className="text-lg font-bold">

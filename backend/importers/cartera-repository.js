@@ -37,7 +37,8 @@ const SNAPSHOT_FIELDS = [
   ['fecha_proxima_pago', 'fechaProximaPago'],
   ['fecha_vencimiento', 'fechaVencimiento'],
   ['producto', 'producto'],
-  ['codigo_postal', 'codigoPostal']
+  ['codigo_postal', 'codigoPostal'],
+  ['datos_origen', 'rawData']
 ]
 
 const SNAPSHOT_COLUMNS = SNAPSHOT_FIELDS.map(
@@ -424,14 +425,19 @@ async function insertSnapshot(
   {
     importacionId,
     cuentaId,
-    snapshot
+    snapshot,
+    rawData
   }
 ) {
+  const snapshotValues = {
+    ...snapshot,
+    rawData: rawData || {}
+  }
   const values = [
     importacionId,
     cuentaId,
     ...SNAPSHOT_FIELDS.map(
-      ([, key]) => snapshot[key] ?? null
+      ([, key]) => snapshotValues[key] ?? null
     )
   ]
   const result = await client.query(
@@ -703,7 +709,8 @@ async function persistPortfolio({
         {
           importacionId: importation.id,
           cuentaId: account.id,
-          snapshot: record.snapshot
+          snapshot: record.snapshot,
+          rawData: record.rawData
         }
       )
 

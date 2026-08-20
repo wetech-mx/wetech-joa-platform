@@ -16,9 +16,14 @@ const {
   normalizeInteger,
   parsePortfolioDate,
   readPortfolioWorkbook,
+  SCL_HEADERS,
+  expandSclPipeRows,
+  isSclPipeWorkbook,
   transformPortfolioRow,
   transformPortfolioRows,
-  validateHeaders
+  transformSclPortfolioRow,
+  validateHeaders,
+  validateSclHeaders
 } = require('../importers/cartera-excel')
 
 function workbookBuffer(headers, rows = []) {
@@ -39,6 +44,13 @@ function workbookBuffer(headers, rows = []) {
     bookType: 'xlsx',
     compression: true
   })
+}
+
+function pipeWorkbookBuffer(headers, rows = []) {
+  return workbookBuffer(
+    [headers.join('|')],
+    rows.map(row => [row.join('|')])
+  )
 }
 
 async function withTemporaryWorkbook(
@@ -68,10 +80,37 @@ async function withTemporaryWorkbook(
   }
 }
 
+async function withTemporaryBuffer(
+  fileName,
+  buffer,
+  callback
+) {
+  const directory = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), 'cartera-source-')
+  )
+  const filePath = path.join(directory, fileName)
+
+  try {
+    await fs.promises.writeFile(filePath, buffer)
+    return await callback({ buffer, filePath })
+  } finally {
+    await fs.promises.rm(directory, {
+      recursive: true,
+      force: true
+    })
+  }
+}
+
 test('define exactamente los 34 encabezados de cartera', () => {
   assert.equal(HEADERS.length, 34)
   assert.equal(HEADERS[0], 'IdCampaña')
   assert.equal(HEADERS[33], 'CodigoPostal')
+})
+
+test('define los 94 campos observados en la descarga SCL', () => {
+  assert.equal(SCL_HEADERS.length, 94)
+  assert.equal(SCL_HEADERS[0], 'CLIENTE_UNICO')
+  assert.equal(SCL_HEADERS[93], 'TIPO_QUEJA')
 })
 
 test('acepta una fecha ISO real', () => {
@@ -166,6 +205,78 @@ test('rechaza columnas desordenadas', () => {
   )
 })
 
+test('detecta y expande la descarga SCL delimitada por pipes', () => {
+  const row = SCL_HEADERS.map(() => '')
+  row[0] = 'CLIENTE-1'
+
+  const workbookRows = [
+    [SCL_HEADERS.join('|')],
+    [row.join('|')]
+  ]
+
+  assert.equal(isSclPipeWorkbook(workbookRows), true)
+
+  const expanded = expandSclPipeRows(workbookRows)
+
+  assert.equal(expanded.length, 2)
+  assert.equal(expanded[0].length, 94)
+  assert.equal(validateSclHeaders(expanded[0]), true)
+  assert.equal(expanded[1][0], 'CLIENTE-1')
+})
+
+test('rechaza una fila SCL con campos incompletos', () => {
+  assert.throws(
+    () => expandSclPipeRows([
+      [SCL_HEADERS.join('|')],
+      [SCL_HEADERS.slice(0, -1).join('|')]
+    ]),
+    error => (
+      error.code === 'SCL_IMPORT_ROW_FIELD_COUNT'
+      && error.details.rowNumber === 2
+      && error.details.actual === 93
+    )
+  )
+})
+
+test('transforma SCL y conserva los 94 campos originales', () => {
+  const source = Object.fromEntries(
+    SCL_HEADERS.map(header => [header, 'N/A'])
+  )
+
+  Object.assign(source, {
+    CLIENTE_UNICO: '0001234567890',
+    NOMBRE_CTE: 'Cliente de prueba',
+    GENERO_CLIENTE: 'F',
+    EDAD_CLIENTE: '42',
+    CP_CTE: '01234',
+    CLASIFICACION_CTE: 'ALTO',
+    DIAS_ATRASO: '21',
+    SALDO_TOTAL: '1,234.50',
+    'SALDO REQUERIDO': '500',
+    PAGO_NORMAL: '250',
+    PRODUCTO: 'PRESTAMO',
+    CAMPANIA: 'SEGMENTO-5',
+    TELEFONO1: '5512345678',
+    TELEFONO2: '0',
+    ABONO_SEMANAL: '50'
+  })
+
+  const record = transformSclPortfolioRow(source, 9)
+
+  assert.equal(record.identity.idCampania, 'SEGMENTO-5')
+  assert.equal(record.identity.idCliente, '0001234567890')
+  assert.equal(record.identity.folio, '0001234567890')
+  assert.equal(record.snapshot.nombre, 'Cliente de prueba')
+  assert.equal(record.snapshot.edad, 42)
+  assert.equal(record.snapshot.telefono1, '5512345678')
+  assert.equal(record.snapshot.telefono2, null)
+  assert.equal(record.snapshot.saldo, 1234.5)
+  assert.equal(record.snapshot.pagoRequerido, 500)
+  assert.equal(record.snapshot.codigoPostal, '01234')
+  assert.equal(Object.keys(record.rawData).length, 94)
+  assert.equal(record.rawData.OCUPACION, 'N/A')
+})
+
 test('lee un Excel válido sin insertar datos', async () => {
   const row = HEADERS.map(() => '')
 
@@ -210,6 +321,50 @@ test('lee un Excel válido sin insertar datos', async () => {
       assert.equal(
         result.rows[0].CodigoPostal,
         '01234'
+      )
+    }
+  )
+})
+
+test('lee directamente una descarga SCL de una columna', async () => {
+  const row = SCL_HEADERS.map(() => 'N/A')
+  const set = (field, value) => {
+    row[SCL_HEADERS.indexOf(field)] = value
+  }
+
+  set('CLIENTE_UNICO', '0001234567890')
+  set('NOMBRE_CTE', 'Cliente de prueba')
+  set('CAMPANIA', 'SEGMENTO-5')
+  set('SALDO_TOTAL', '1234.50')
+  set('DIAS_ATRASO', '21')
+
+  const buffer = pipeWorkbookBuffer(
+    SCL_HEADERS,
+    [row]
+  )
+
+  await withTemporaryBuffer(
+    'Descarga_cartera.xlsx',
+    buffer,
+    async ({ filePath }) => {
+      const result = await readPortfolioWorkbook(
+        filePath,
+        {
+          date: '2026-08-20'
+        }
+      )
+
+      assert.equal(result.date, '2026-08-20')
+      assert.equal(result.format, 'scl_pipe_v1')
+      assert.equal(result.headers.length, 94)
+      assert.equal(result.totalRows, 1)
+      assert.equal(
+        result.records[0].identity.idCliente,
+        '0001234567890'
+      )
+      assert.equal(
+        Object.keys(result.records[0].rawData).length,
+        94
       )
     }
   )

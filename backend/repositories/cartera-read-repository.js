@@ -1189,6 +1189,7 @@ async function getPortfolioAccount({
       s.fecha_vencimiento,
       s.producto,
       s.codigo_postal,
+      s.datos_origen,
       a.id AS asignacion_id,
       a.usuario_id AS ejecutivo_id,
       a.metodo AS asignacion_metodo,
