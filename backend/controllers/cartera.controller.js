@@ -1,6 +1,13 @@
 const pool = require('../config/database')
 
 const {
+  CarteraImportError
+} = require('../importers/cartera-excel')
+const {
+  CarteraPersistenceError
+} = require('../importers/cartera-repository')
+
+const {
   CarteraReadError,
   getPortfolioAccount,
   getPortfolioSummary,
@@ -24,6 +31,13 @@ const {
   '../repositories/cartera-management-repository'
 )
 
+const {
+  CarteraUploadError,
+  getPortfolioImportJob,
+  previewPortfolioUpload,
+  startPortfolioImport
+} = require('../services/cartera-upload-service')
+
 function respondWithError(
   res,
   error
@@ -31,9 +45,26 @@ function respondWithError(
   if (
     error instanceof CarteraReadError
     || error instanceof CarteraManagementError
+    || error instanceof CarteraUploadError
   ) {
     return res
       .status(error.status)
+      .json({
+        error: error.message,
+        code: error.code
+      })
+  }
+
+  if (
+    error instanceof CarteraImportError
+    || error instanceof CarteraPersistenceError
+  ) {
+    return res
+      .status(
+        error instanceof CarteraPersistenceError
+          ? 409
+          : 400
+      )
       .json({
         error: error.message,
         code: error.code
@@ -66,6 +97,65 @@ async function obtenerCartera(
     })
 
     return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function previsualizarImportacionCartera(
+  req,
+  res
+) {
+  try {
+    const result = await previewPortfolioUpload({
+      pool,
+      usuario: req.usuario,
+      originId: req.body?.origen_id,
+      buffer: req.file?.buffer,
+      fileName: req.file?.originalname,
+      date: req.body?.fecha
+    })
+
+    return res.json({
+      preview: result
+    })
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function confirmarImportacionCartera(
+  req,
+  res
+) {
+  try {
+    const job = await startPortfolioImport({
+      pool,
+      usuario: req.usuario,
+      originId: req.body?.origen_id,
+      buffer: req.file?.buffer,
+      fileName: req.file?.originalname,
+      date: req.body?.fecha,
+      previewSha256: req.body?.confirmacion_sha256
+    })
+
+    return res.status(202).json({ job })
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+function obtenerEstadoImportacionCartera(
+  req,
+  res
+) {
+  try {
+    const job = getPortfolioImportJob({
+      usuario: req.usuario,
+      jobId: req.params.jobId
+    })
+
+    return res.json({ job })
   } catch (error) {
     return respondWithError(res, error)
   }
@@ -299,15 +389,18 @@ module.exports = {
   actualizarEstadoCartera,
   actualizarTipificacionCartera,
   agregarNotaCartera,
+  confirmarImportacionCartera,
   crearTipificacionCartera,
   obtenerCartera,
   obtenerCuentaCartera,
   obtenerEjecutivosCartera,
+  obtenerEstadoImportacionCartera,
   obtenerGestionesCartera,
   obtenerOrigenesCartera,
   obtenerResumenCartera,
   obtenerTipificacionesCartera,
   obtenerTipificacionesAdministracion,
+  previsualizarImportacionCartera,
   reasignarCuentaCartera,
   registrarGestionCartera,
   respondWithError

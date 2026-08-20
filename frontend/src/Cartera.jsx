@@ -6,6 +6,7 @@ import {
 
 import { apiFetch } from './api'
 import CarteraDrawer from './CarteraDrawer'
+import CarteraImportDialog from './CarteraImportDialog'
 
 import {
   CARTERA_ESTADOS,
@@ -111,12 +112,17 @@ export default function Cartera({
   const [executives, setExecutives] = useState([])
   const [origins, setOrigins] = useState([])
   const [selectedId, setSelectedId] = useState(null)
+  const [showImport, setShowImport] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshVersion, setRefreshVersion] = useState(0)
 
   const isExecutive =
     usuario?.rol === 'Ejecutivo'
+  const canImport = [
+    'Administrador',
+    'super_admin'
+  ].includes(usuario?.rol)
 
   const selectedOrigin = origins.find(
     item => String(item.id) === String(filters.origen)
@@ -281,13 +287,25 @@ export default function Cartera({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-orange-200 bg-orange-50 px-5 py-3">
-          <p className="text-xs font-bold uppercase text-orange-700">
-            Total de cuentas
-          </p>
-          <p className="text-3xl font-normal text-orange-700">
-            {pagination.total}
-          </p>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {canImport && (
+            <button
+              type="button"
+              onClick={() => setShowImport(true)}
+              className="rounded-xl bg-gray-900 px-5 py-3 font-bold text-white hover:bg-orange-600"
+            >
+              Importar descarga SCL
+            </button>
+          )}
+
+          <div className="rounded-2xl border border-orange-200 bg-orange-50 px-5 py-3">
+            <p className="text-xs font-bold uppercase text-orange-700">
+              Total de cuentas
+            </p>
+            <p className="text-3xl font-normal text-orange-700">
+              {pagination.total}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -597,6 +615,14 @@ export default function Cartera({
           executives={executives}
           onClose={() => setSelectedId(null)}
           onChanged={refresh}
+        />
+      )}
+
+      {showImport && (
+        <CarteraImportDialog
+          origins={origins}
+          onClose={() => setShowImport(false)}
+          onImported={refresh}
         />
       )}
     </section>

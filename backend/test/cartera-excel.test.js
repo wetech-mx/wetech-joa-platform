@@ -15,6 +15,7 @@ const {
   normalizeDecimal,
   normalizeInteger,
   parsePortfolioDate,
+  readPortfolioBuffer,
   readPortfolioWorkbook,
   SCL_HEADERS,
   expandSclPipeRows,
@@ -367,6 +368,39 @@ test('lee directamente una descarga SCL de una columna', async () => {
         94
       )
     }
+  )
+})
+
+test('valida una descarga SCL recibida en memoria', () => {
+  const row = SCL_HEADERS.map(() => 'N/A')
+  const set = (field, value) => {
+    row[SCL_HEADERS.indexOf(field)] = value
+  }
+
+  set('CLIENTE_UNICO', '0001234567890')
+  set('NOMBRE_CTE', 'Cliente controlado')
+  set('CAMPANIA', 'SEGMENTO-5')
+  set('SALDO_TOTAL', '950.25')
+  set('TELEFONO1', '5512345678')
+
+  const buffer = pipeWorkbookBuffer(
+    SCL_HEADERS,
+    [row]
+  )
+  const result = readPortfolioBuffer(
+    buffer,
+    {
+      fileName: 'Descarga_cartera.xlsx',
+      date: '2026-08-20'
+    }
+  )
+
+  assert.equal(result.fileName, 'Descarga_cartera.xlsx')
+  assert.equal(result.totalRows, 1)
+  assert.equal(result.records[0].snapshot.saldo, 950.25)
+  assert.equal(
+    result.sha256,
+    checksumFor(buffer)
   )
 })
 

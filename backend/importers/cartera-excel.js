@@ -835,11 +835,20 @@ function transformSclPortfolioRows(rows) {
   )
 }
 
-async function readPortfolioWorkbook(
-  filePath,
+function readPortfolioBuffer(
+  buffer,
   options = {}
 ) {
-  const buffer = await fs.promises.readFile(filePath)
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new CarteraImportError(
+      'BAZ_IMPORT_FILE_REQUIRED',
+      'No se recibió un archivo Excel válido'
+    )
+  }
+
+  const fileName = path.basename(
+    String(options.fileName || 'cartera.xlsx')
+  )
   let workbook
 
   try {
@@ -898,7 +907,7 @@ async function readPortfolioWorkbook(
   }
 
   const date = resolvePortfolioDate(
-    filePath,
+    fileName,
     options.date
   )
 
@@ -927,7 +936,7 @@ async function readPortfolioWorkbook(
 
   return {
     date,
-    fileName: path.basename(filePath),
+    fileName,
     sha256: checksumFor(buffer),
     format: isScl ? 'scl_pipe_v1' : 'normalized_v1',
     headers: [...headers],
@@ -935,6 +944,21 @@ async function readPortfolioWorkbook(
     records,
     totalRows: dataRows.length
   }
+}
+
+async function readPortfolioWorkbook(
+  filePath,
+  options = {}
+) {
+  const buffer = await fs.promises.readFile(filePath)
+
+  return readPortfolioBuffer(
+    buffer,
+    {
+      ...options,
+      fileName: path.basename(filePath)
+    }
+  )
 }
 
 module.exports = {
@@ -945,6 +969,7 @@ module.exports = {
   normalizeDecimal,
   normalizeInteger,
   parsePortfolioDate,
+  readPortfolioBuffer,
   readPortfolioWorkbook,
   resolvePortfolioDate,
   SCL_HEADERS,
