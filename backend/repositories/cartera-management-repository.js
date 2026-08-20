@@ -12,6 +12,12 @@ const ALLOWED_STATES = new Set(
   Object.values(CARTERA_ESTADOS)
 )
 
+const TIPIFICATION_STATES = new Set(
+  [...ALLOWED_STATES].filter(
+    state => state !== CARTERA_ESTADOS.SIN_GESTIONAR
+  )
+)
+
 const MANAGEMENT_CHANNELS = new Set([
   'telefono',
   'whatsapp',
@@ -137,6 +143,183 @@ function normalizeState(value) {
   }
 
   return state
+}
+
+function normalizeBooleanField(
+  value,
+  {
+    field,
+    defaultValue
+  }
+) {
+  if (value === undefined) {
+    return defaultValue
+  }
+
+  if (typeof value !== 'boolean') {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_BOOLEAN_INVALID',
+      `${field} debe ser verdadero o falso`
+    )
+  }
+
+  return value
+}
+
+function normalizeIntegerRange(
+  value,
+  {
+    field,
+    minimum,
+    maximum,
+    defaultValue
+  }
+) {
+  const candidate = value === undefined
+    ? defaultValue
+    : value
+  const text = String(candidate ?? '').trim()
+
+  if (!/^\d+$/.test(text)) {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_NUMBER_INVALID',
+      `${field} no es válido`
+    )
+  }
+
+  const number = Number(text)
+
+  if (
+    !Number.isSafeInteger(number)
+    || number < minimum
+    || number > maximum
+  ) {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_NUMBER_INVALID',
+      `${field} está fuera del rango permitido`
+    )
+  }
+
+  return number
+}
+
+function normalizeTypificationCode(value) {
+  const code = normalizeRequiredText(
+    value,
+    {
+      field: 'código',
+      maximum: 100
+    }
+  ).toLowerCase()
+
+  if (!/^[a-z0-9][a-z0-9_]{0,99}$/.test(code)) {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_CODE_INVALID',
+      'El código debe usar minúsculas, números y guion bajo'
+    )
+  }
+
+  return code
+}
+
+function normalizeTypificationDefinition(
+  input = {},
+  {
+    includeCode = false
+  } = {}
+) {
+  const state = normalizeState(
+    input.estado_resultante
+  )
+
+  if (!TIPIFICATION_STATES.has(state)) {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_STATE_INVALID',
+      'El estado resultante no es válido para una tipificación'
+    )
+  }
+
+  const definition = {
+    name: normalizeRequiredText(
+      input.nombre,
+      {
+        field: 'nombre',
+        maximum: 150
+      }
+    ),
+    priority: normalizeIntegerRange(
+      input.prioridad,
+      {
+        field: 'prioridad',
+        minimum: 1,
+        maximum: 4,
+        defaultValue: 4
+      }
+    ),
+    state,
+    effectiveContact: normalizeBooleanField(
+      input.contacto_efectivo,
+      {
+        field: 'contacto efectivo',
+        defaultValue: false
+      }
+    ),
+    requiresPromise: normalizeBooleanField(
+      input.requiere_promesa,
+      {
+        field: 'requiere promesa',
+        defaultValue: false
+      }
+    ),
+    requiresFollowUp: normalizeBooleanField(
+      input.requiere_seguimiento,
+      {
+        field: 'requiere seguimiento',
+        defaultValue: false
+      }
+    ),
+    closesAccount: normalizeBooleanField(
+      input.cierra_cuenta,
+      {
+        field: 'cierra cuenta',
+        defaultValue: false
+      }
+    ),
+    order: normalizeIntegerRange(
+      input.orden,
+      {
+        field: 'orden',
+        minimum: 1,
+        maximum: 999,
+        defaultValue: 100
+      }
+    ),
+    active: normalizeBooleanField(
+      input.activa,
+      {
+        field: 'activa',
+        defaultValue: true
+      }
+    )
+  }
+
+  if (
+    definition.closesAccount
+    && definition.requiresFollowUp
+  ) {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_RULE_INVALID',
+      'Una tipificación que cierra la cuenta no puede requerir seguimiento'
+    )
+  }
+
+  if (includeCode) {
+    definition.code = normalizeTypificationCode(
+      input.codigo
+    )
+  }
+
+  return definition
 }
 
 function normalizeEnum(
@@ -488,6 +671,251 @@ async function listPortfolioTypifications({
 
   return {
     data: result.rows
+  }
+}
+
+function requireAdministrator(usuario) {
+  const actor = resolveActor(usuario)
+
+  if (!actor.isAdministrator) {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_ADMIN_REQUIRED',
+      'Solo un administrador puede modificar tipificaciones',
+      403
+    )
+  }
+
+  return actor
+}
+
+async function listPortfolioTypificationsAdmin({
+  pool,
+  usuario
+}) {
+  if (!pool || typeof pool.query !== 'function') {
+    throw new CarteraManagementError(
+      'CARTERA_POOL_INVALID',
+      'La conexión de datos no es válida',
+      500
+    )
+  }
+
+  const actor = requireAdministrator(usuario)
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      codigo,
+      nombre,
+      prioridad,
+      estado_resultante,
+      contacto_efectivo,
+      requiere_promesa,
+      requiere_seguimiento,
+      cierra_cuenta,
+      orden,
+      activa,
+      creada_at,
+      actualizada_at
+    FROM public.cartera_tipificaciones
+    WHERE empresa_id = $1
+    ORDER BY
+      activa DESC,
+      prioridad,
+      orden,
+      nombre,
+      id
+    `,
+    [actor.empresaId]
+  )
+
+  return {
+    data: result.rows
+  }
+}
+
+function translateTypificationWriteError(error) {
+  if (error?.code === '23505') {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_CODE_DUPLICATED',
+      'Ya existe una tipificación con ese código',
+      409
+    )
+  }
+
+  throw error
+}
+
+async function createPortfolioTypification({
+  pool,
+  usuario,
+  input
+}) {
+  if (!pool || typeof pool.query !== 'function') {
+    throw new CarteraManagementError(
+      'CARTERA_POOL_INVALID',
+      'La conexión de datos no es válida',
+      500
+    )
+  }
+
+  const actor = requireAdministrator(usuario)
+  const definition = normalizeTypificationDefinition(
+    input,
+    { includeCode: true }
+  )
+
+  try {
+    const result = await pool.query(
+      `
+      INSERT INTO public.cartera_tipificaciones
+      (
+        empresa_id,
+        codigo,
+        nombre,
+        prioridad,
+        estado_resultante,
+        contacto_efectivo,
+        requiere_promesa,
+        requiere_seguimiento,
+        cierra_cuenta,
+        orden,
+        activa
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11
+      )
+      RETURNING
+        id,
+        codigo,
+        nombre,
+        prioridad,
+        estado_resultante,
+        contacto_efectivo,
+        requiere_promesa,
+        requiere_seguimiento,
+        cierra_cuenta,
+        orden,
+        activa,
+        creada_at,
+        actualizada_at
+      `,
+      [
+        actor.empresaId,
+        definition.code,
+        definition.name,
+        definition.priority,
+        definition.state,
+        definition.effectiveContact,
+        definition.requiresPromise,
+        definition.requiresFollowUp,
+        definition.closesAccount,
+        definition.order,
+        definition.active
+      ]
+    )
+
+    return {
+      typification: result.rows[0]
+    }
+  } catch (error) {
+    return translateTypificationWriteError(error)
+  }
+}
+
+async function updatePortfolioTypification({
+  pool,
+  usuario,
+  typificationId,
+  input
+}) {
+  if (!pool || typeof pool.query !== 'function') {
+    throw new CarteraManagementError(
+      'CARTERA_POOL_INVALID',
+      'La conexión de datos no es válida',
+      500
+    )
+  }
+
+  const id = normalizeBigintId(
+    typificationId,
+    'id'
+  )
+  const actor = requireAdministrator(usuario)
+  const definition = normalizeTypificationDefinition(input)
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE public.cartera_tipificaciones
+      SET
+        nombre = $3,
+        prioridad = $4,
+        estado_resultante = $5,
+        contacto_efectivo = $6,
+        requiere_promesa = $7,
+        requiere_seguimiento = $8,
+        cierra_cuenta = $9,
+        orden = $10,
+        activa = $11,
+        actualizada_at = NOW()
+      WHERE
+        id = $1
+        AND empresa_id = $2
+      RETURNING
+        id,
+        codigo,
+        nombre,
+        prioridad,
+        estado_resultante,
+        contacto_efectivo,
+        requiere_promesa,
+        requiere_seguimiento,
+        cierra_cuenta,
+        orden,
+        activa,
+        creada_at,
+        actualizada_at
+      `,
+      [
+        id,
+        actor.empresaId,
+        definition.name,
+        definition.priority,
+        definition.state,
+        definition.effectiveContact,
+        definition.requiresPromise,
+        definition.requiresFollowUp,
+        definition.closesAccount,
+        definition.order,
+        definition.active
+      ]
+    )
+
+    if (!result.rows[0]) {
+      throw new CarteraManagementError(
+        'CARTERA_TYPIFICATION_NOT_FOUND',
+        'La tipificación no existe en la empresa',
+        404
+      )
+    }
+
+    return {
+      typification: result.rows[0]
+    }
+  } catch (error) {
+    return translateTypificationWriteError(error)
   }
 }
 
@@ -1184,17 +1612,22 @@ module.exports = {
   CarteraManagementError,
   MANAGEMENT_CHANNELS,
   MANAGEMENT_RELATIONSHIPS,
+  TIPIFICATION_STATES,
   addPortfolioNote,
+  createPortfolioTypification,
   listPortfolioTypifications,
+  listPortfolioTypificationsAdmin,
   lockAccessibleAccount,
   normalizeRequiredText,
   normalizePortfolioManagement,
+  normalizeTypificationDefinition,
   normalizeTypification,
   normalizeState,
   normalizeUserId,
   reassignPortfolioAccount,
   registerPortfolioManagement,
   resolveActor,
+  updatePortfolioTypification,
   updatePortfolioState,
   withTransaction
 }

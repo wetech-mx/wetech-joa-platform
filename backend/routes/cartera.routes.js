@@ -2,7 +2,9 @@ const express = require('express')
 
 const {
   actualizarEstadoCartera,
+  actualizarTipificacionCartera,
   agregarNotaCartera,
+  crearTipificacionCartera,
   obtenerCartera,
   obtenerCuentaCartera,
   obtenerEjecutivosCartera,
@@ -10,6 +12,7 @@ const {
   obtenerOrigenesCartera,
   obtenerResumenCartera,
   obtenerTipificacionesCartera,
+  obtenerTipificacionesAdministracion,
   reasignarCuentaCartera,
   registrarGestionCartera
 } = require('../controllers/cartera.controller')
@@ -55,6 +58,24 @@ router.get(
 router.get(
   '/cartera/tipificaciones',
   obtenerTipificacionesCartera
+)
+
+router.get(
+  '/cartera/tipificaciones/administracion',
+  requiereAdmin,
+  obtenerTipificacionesAdministracion
+)
+
+router.post(
+  '/cartera/tipificaciones',
+  requiereAdmin,
+  crearTipificacionCartera
+)
+
+router.patch(
+  '/cartera/tipificaciones/:id',
+  requiereAdmin,
+  actualizarTipificacionCartera
 )
 
 router.post(

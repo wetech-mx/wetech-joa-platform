@@ -65,3 +65,21 @@ test('supervisión consulta y filtra gestiones estructuradas', () => {
   assert.match(app, /setPantalla\('gestiones'\)/)
   assert.match(app, /usuario\?\.rol !== 'Ejecutivo'/)
 })
+
+test('administración edita el catálogo sin eliminar historial', () => {
+  const catalog = source('CarteraTipificaciones.jsx')
+  const app = source('App.jsx')
+
+  assert.match(
+    catalog,
+    /\/crm-api\/cartera\/tipificaciones\/administracion/
+  )
+  assert.match(catalog, /method: editing \? 'PATCH' : 'POST'/)
+  assert.match(catalog, /Desactivar conserva el historial/)
+  assert.match(catalog, /requiere_promesa/)
+  assert.match(catalog, /requiere_seguimiento/)
+  assert.match(catalog, /cierra_cuenta/)
+  assert.doesNotMatch(catalog, /method: 'DELETE'/)
+  assert.match(app, /import CarteraTipificaciones/)
+  assert.match(app, /setPantalla\('tipificaciones'\)/)
+})

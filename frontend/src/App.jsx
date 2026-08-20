@@ -11,6 +11,7 @@ import BancoAzteca from './BancoAzteca'
 import Cartera from './Cartera'
 import CarteraDashboard from './CarteraDashboard'
 import CarteraGestiones from './CarteraGestiones'
+import CarteraTipificaciones from './CarteraTipificaciones'
 import Integraciones from './Integraciones'
 import { apiFetch } from './api'
 
@@ -459,6 +460,15 @@ const navigationClass = screen => (
 
           {usuario?.rol !== 'Ejecutivo' && (
             <button
+              onClick={() => setPantalla('tipificaciones')}
+              className={navigationClass('tipificaciones')}
+            >
+              Tipificaciones
+            </button>
+          )}
+
+          {usuario?.rol !== 'Ejecutivo' && (
+            <button
               onClick={() => setPantalla('integraciones')}
               className={navigationClass('integraciones')}
             >
@@ -515,6 +525,10 @@ const navigationClass = screen => (
 
 {pantalla === 'gestiones' && usuario?.rol !== 'Ejecutivo' && (
   <CarteraGestiones usuario={usuario} />
+)}
+
+{pantalla === 'tipificaciones' && usuario?.rol !== 'Ejecutivo' && (
+  <CarteraTipificaciones />
 )}
 
 {(pantalla === 'dashboard' || pantalla === 'leads') && (

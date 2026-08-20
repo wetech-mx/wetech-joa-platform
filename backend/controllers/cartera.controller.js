@@ -13,9 +13,12 @@ const {
 const {
   CarteraManagementError,
   addPortfolioNote,
+  createPortfolioTypification,
   listPortfolioTypifications,
+  listPortfolioTypificationsAdmin,
   reassignPortfolioAccount,
   registerPortfolioManagement,
+  updatePortfolioTypification,
   updatePortfolioState
 } = require(
   '../repositories/cartera-management-repository'
@@ -167,6 +170,57 @@ async function obtenerTipificacionesCartera(
   }
 }
 
+async function obtenerTipificacionesAdministracion(
+  req,
+  res
+) {
+  try {
+    const result = await listPortfolioTypificationsAdmin({
+      pool,
+      usuario: req.usuario
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function crearTipificacionCartera(
+  req,
+  res
+) {
+  try {
+    const result = await createPortfolioTypification({
+      pool,
+      usuario: req.usuario,
+      input: req.body
+    })
+
+    return res.status(201).json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function actualizarTipificacionCartera(
+  req,
+  res
+) {
+  try {
+    const result = await updatePortfolioTypification({
+      pool,
+      usuario: req.usuario,
+      typificationId: req.params.id,
+      input: req.body
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
 async function registrarGestionCartera(
   req,
   res
@@ -243,7 +297,9 @@ async function reasignarCuentaCartera(
 
 module.exports = {
   actualizarEstadoCartera,
+  actualizarTipificacionCartera,
   agregarNotaCartera,
+  crearTipificacionCartera,
   obtenerCartera,
   obtenerCuentaCartera,
   obtenerEjecutivosCartera,
@@ -251,6 +307,7 @@ module.exports = {
   obtenerOrigenesCartera,
   obtenerResumenCartera,
   obtenerTipificacionesCartera,
+  obtenerTipificacionesAdministracion,
   reasignarCuentaCartera,
   registrarGestionCartera,
   respondWithError

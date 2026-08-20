@@ -185,7 +185,7 @@ export default function CarteraGestiones({ usuario }) {
         }
 
         setTypifications(
-          Array.isArray(catalog) ? catalog : []
+          Array.isArray(catalog?.data) ? catalog.data : []
         )
         setExecutives(
           Array.isArray(users) ? users : []
