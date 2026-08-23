@@ -989,7 +989,8 @@ async function lockAccessibleAccount(
     `
     SELECT
       c.id,
-      c.estado_gestion
+      c.estado_gestion,
+      c.activa
     FROM public.cartera_cuentas c
     WHERE
       c.id = $1
@@ -1454,7 +1455,40 @@ async function registerPortfolioManagement({
         now
       )
 
-      if (
+      if (account.activa === false) {
+        throw new CarteraManagementError(
+          'CARTERA_ACCOUNT_INACTIVE',
+          'La cuenta ya está cerrada o inactiva',
+          409
+        )
+      }
+
+      if (management.typification.closesAccount) {
+        await client.query(
+          `
+          UPDATE public.cartera_cuentas
+          SET
+            estado_gestion = $2,
+            activa = FALSE,
+            actualizada_at = NOW()
+          WHERE id = $1
+          `,
+          [id, management.typification.state]
+        )
+
+        await client.query(
+          `
+          UPDATE public.cartera_asignaciones
+          SET
+            activa = FALSE,
+            finalizada_at = NOW()
+          WHERE
+            cuenta_id = $1
+            AND activa = TRUE
+          `,
+          [id]
+        )
+      } else if (
         account.estado_gestion
         !== management.typification.state
       ) {
@@ -1580,13 +1614,19 @@ async function registerPortfolioManagement({
           actor.actorId,
           management.notes,
           JSON.stringify({
-            estado: account.estado_gestion
+            estado: account.estado_gestion,
+            activa: account.activa
           }),
           JSON.stringify({
             estado: management.typification.state,
+            activa: management.typification.closesAccount
+              ? false
+              : account.activa,
             tipificacion: management.typification.code,
             tipificacion_nombre: management.typification.name,
             prioridad: management.typification.priority,
+            cierra_cuenta:
+              management.typification.closesAccount,
             codigo_resultado: management.externalCode,
             promesa_monto: management.promiseAmount,
             promesa_fecha: management.promiseDate,
@@ -1600,7 +1640,10 @@ async function registerPortfolioManagement({
         management: record,
         account: {
           id,
-          estado_gestion: management.typification.state
+          estado_gestion: management.typification.state,
+          activa: management.typification.closesAccount
+            ? false
+            : account.activa
         }
       }
     }

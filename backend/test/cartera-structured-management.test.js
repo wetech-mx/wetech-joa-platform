@@ -240,6 +240,82 @@ test('registra gestión y estado dentro de una transacción', async () => {
   assert.equal(pool.client.released, true)
 })
 
+test('cierra la cuenta y finaliza la asignación cuando lo ordena el catálogo', async () => {
+  const pool = transactionPool(
+    async (text, values) => {
+      if (text.includes('FROM public.cartera_cuentas')) {
+        return {
+          rows: [{
+            id: '101',
+            estado_gestion: 'pago_realizado',
+            activa: true
+          }]
+        }
+      }
+
+      if (text.includes('FROM public.cartera_tipificaciones')) {
+        return {
+          rows: [typification({
+            codigo: 'cierre_prueba',
+            nombre: 'Cierre de prueba',
+            estado_resultante: 'cerrado',
+            requiere_promesa: false,
+            cierra_cuenta: true
+          })]
+        }
+      }
+
+      if (text.startsWith('UPDATE public.cartera_cuentas')) {
+        assert.deepEqual(values, ['101', 'cerrado'])
+        assert.match(text, /activa = FALSE/)
+        return { rows: [] }
+      }
+
+      if (text.startsWith('UPDATE public.cartera_asignaciones')) {
+        assert.deepEqual(values, ['101'])
+        assert.match(text, /finalizada_at = NOW\(\)/)
+        return { rows: [] }
+      }
+
+      if (text.includes('INSERT INTO public.cartera_gestiones')) {
+        return {
+          rows: [{
+            id: '602',
+            cuenta_id: '101',
+            tipificacion_codigo: 'cierre_prueba',
+            estado_resultante: 'cerrado'
+          }]
+        }
+      }
+
+      if (text.includes('INSERT INTO public.cartera_historial')) {
+        assert.equal(values[1], '602')
+        assert.match(values[5], /\"activa\":false/)
+        assert.match(values[5], /\"cierra_cuenta\":true/)
+        return { rows: [] }
+      }
+
+      throw new Error('SQL no esperado')
+    }
+  )
+
+  const result = await registerPortfolioManagement({
+    pool,
+    usuario: executive(),
+    accountId: '101',
+    input: input({
+      promesa_monto: null,
+      promesa_fecha: null,
+      notas: 'Cierre controlado de la cuenta de prueba.'
+    }),
+    now: NOW
+  })
+
+  assert.equal(result.account.estado_gestion, 'cerrado')
+  assert.equal(result.account.activa, false)
+  assert.equal(pool.calls.at(-1).text, 'COMMIT')
+})
+
 test('rechaza tipificación ajena o inactiva y revierte', async () => {
   const pool = transactionPool(
     async text => {
