@@ -233,7 +233,7 @@ test('la ruta es administrativa y no recibe credenciales', () => {
 
   assert.match(
     routes,
-    /router\.use\([\s\S]*verificaToken,[\s\S]*requiereEmpresa,[\s\S]*requiereAdmin[\s\S]*\)/
+    /router\.use\(\s*'\/integraciones',[\s\S]*verificaToken,[\s\S]*requiereEmpresa,[\s\S]*requiereAdmin[\s\S]*\)/
   )
   assert.match(
     routes,

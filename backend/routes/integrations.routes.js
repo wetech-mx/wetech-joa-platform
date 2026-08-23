@@ -21,6 +21,7 @@ const {
 const router = express.Router()
 
 router.use(
+  '/integraciones',
   verificaToken,
   requiereEmpresa,
   requiereAdmin

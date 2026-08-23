@@ -316,11 +316,27 @@ test('protege todas las rutas administrativas', () => {
 
   assert.match(
     routes,
-    /router\.use\(\s*verificaToken,\s*requiereEmpresa,\s*requiereAdmin\s*\)/
+    /router\.use\(\s*'\/integraciones',\s*verificaToken,\s*requiereEmpresa,\s*requiereAdmin\s*\)/
   )
   assert.match(
     routes,
     /'\/integraciones\/ejecuciones',\s*obtenerEjecuciones/
+  )
+})
+
+test('limita el middleware administrativo al prefijo de integraciones', () => {
+  const routes = fs.readFileSync(
+    path.join(__dirname, '../routes/integrations.routes.js'),
+    'utf8'
+  )
+
+  assert.match(
+    routes,
+    /router\.use\(\s*'\/integraciones',[\s\S]*?requiereAdmin[\s\S]*?\)/
+  )
+  assert.doesNotMatch(
+    routes,
+    /router\.use\(\s*verificaToken,\s*requiereEmpresa,\s*requiereAdmin/
   )
 })
 
