@@ -4,6 +4,7 @@ import {
 } from 'react'
 
 import { apiFetch } from './api'
+import CarteraAlerts from './CarteraAlerts'
 import {
   CARTERA_ESTADO_LABEL,
   formatDate,
@@ -113,7 +114,9 @@ function DistributionList({
   )
 }
 
-export default function CarteraDashboard() {
+export default function CarteraDashboard({
+  onOpenAccount
+}) {
   const [summary, setSummary] = useState(null)
   const [origins, setOrigins] = useState([])
   const [selectedOriginId, setSelectedOriginId] = useState('')
@@ -336,6 +339,13 @@ export default function CarteraDashboard() {
           cartera importada para el origen seleccionado.
         </div>
       )}
+
+      <CarteraAlerts
+        key={`${selectedOriginId}:${refreshVersion}`}
+        originId={selectedOriginId}
+        refreshVersion={refreshVersion}
+        onOpenAccount={onOpenAccount}
+      />
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
         <article className="rounded-3xl bg-white p-6 shadow">

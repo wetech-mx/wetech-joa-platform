@@ -93,7 +93,9 @@ function StateBadge({ value }) {
 }
 
 export default function Cartera({
-  usuario
+  usuario,
+  initialAccountId,
+  onInitialAccountConsumed
 }) {
   const [draftFilters, setDraftFilters] = useState(
     EMPTY_FILTERS
@@ -111,7 +113,9 @@ export default function Cartera({
   })
   const [executives, setExecutives] = useState([])
   const [origins, setOrigins] = useState([])
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(
+    initialAccountId || null
+  )
   const [showImport, setShowImport] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -169,6 +173,15 @@ export default function Cartera({
   }, [
     filters,
     page
+  ])
+
+  useEffect(() => {
+    if (!initialAccountId) return
+
+    onInitialAccountConsumed?.()
+  }, [
+    initialAccountId,
+    onInitialAccountConsumed
   ])
 
   useEffect(() => {

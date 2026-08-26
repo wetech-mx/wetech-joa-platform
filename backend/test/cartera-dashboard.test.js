@@ -76,6 +76,6 @@ test('la pantalla Dashboard incorpora las métricas de cartera', () => {
   )
   assert.match(
     app,
-    /<CarteraDashboard\s*\/>/
+    /<CarteraDashboard[\s\S]*onOpenAccount=\{openPortfolioAccount\}[\s\S]*\/>/
   )
 })

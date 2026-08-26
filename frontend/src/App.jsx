@@ -25,6 +25,8 @@ const [usuario, setUsuario] = useState(
 
 const [pantalla, setPantalla] = useState('dashboard')
 
+const [carteraAccountId, setCarteraAccountId] = useState(null)
+
 const [vista, setVista] = useState('tabla')
 
 const [leads, setLeads] = useState([])
@@ -394,6 +396,11 @@ const alertasVisibles =
       }
     : alertasSeguras
 
+const openPortfolioAccount = accountId => {
+  setCarteraAccountId(String(accountId))
+  setPantalla('cartera')
+}
+
 
 if (!usuario) {
   return (
@@ -520,7 +527,13 @@ const navigationClass = screen => (
 )}
 
 {pantalla === 'cartera' && (
-  <Cartera usuario={usuario} />
+  <Cartera
+    usuario={usuario}
+    initialAccountId={carteraAccountId}
+    onInitialAccountConsumed={() => {
+      setCarteraAccountId(null)
+    }}
+  />
 )}
 
 {pantalla === 'gestiones' && usuario?.rol !== 'Ejecutivo' && (
@@ -727,7 +740,9 @@ const navigationClass = screen => (
  
 </div>
 
-<CarteraDashboard />
+<CarteraDashboard
+  onOpenAccount={openPortfolioAccount}
+/>
 </>
 )}
 

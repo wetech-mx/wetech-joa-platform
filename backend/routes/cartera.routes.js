@@ -8,6 +8,7 @@ const {
   agregarNotaCartera,
   confirmarImportacionCartera,
   crearTipificacionCartera,
+  obtenerAlertasCartera,
   obtenerCartera,
   obtenerCuentaCartera,
   obtenerEjecutivosCartera,
@@ -94,6 +95,11 @@ router.get(
 router.get(
   '/cartera/resumen',
   obtenerResumenCartera
+)
+
+router.get(
+  '/cartera/alertas',
+  obtenerAlertasCartera
 )
 
 router.get(

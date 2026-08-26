@@ -18,6 +18,10 @@ const {
 } = require('../repositories/cartera-read-repository')
 
 const {
+  getPortfolioAlerts
+} = require('../repositories/cartera-alerts-repository')
+
+const {
   CarteraManagementError,
   addPortfolioNote,
   createPortfolioTypification,
@@ -184,6 +188,23 @@ async function obtenerResumenCartera(
 ) {
   try {
     const result = await getPortfolioSummary({
+      pool,
+      usuario: req.usuario,
+      query: req.query
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function obtenerAlertasCartera(
+  req,
+  res
+) {
+  try {
+    const result = await getPortfolioAlerts({
       pool,
       usuario: req.usuario,
       query: req.query
@@ -391,6 +412,7 @@ module.exports = {
   agregarNotaCartera,
   confirmarImportacionCartera,
   crearTipificacionCartera,
+  obtenerAlertasCartera,
   obtenerCartera,
   obtenerCuentaCartera,
   obtenerEjecutivosCartera,
