@@ -148,6 +148,19 @@ function buildPortfolioAlertStatement({
           seguimiento_estado = 'pendiente'
           AND proximo_seguimiento_at IS NOT NULL
       ),
+      pending_payments AS (
+        SELECT
+          pv.id,
+          pv.gestion_id,
+          pv.cuenta_id,
+          pv.reportado_at
+        FROM public.cartera_pago_validaciones pv
+        INNER JOIN assigned_accounts b
+          ON b.account_id = pv.cuenta_id
+        WHERE
+          pv.empresa_id = $1
+          AND pv.estado = 'pendiente'
+      ),
       historical_activity AS (
         SELECT
           g.usuario_id,
@@ -216,12 +229,17 @@ function buildPortfolioAlertStatement({
                 'America/Mexico_City')::DATE
               = (CURRENT_TIMESTAMP AT TIME ZONE
                 'America/Mexico_City')::DATE
-          ) AS followups_today
+          ) AS followups_today,
+          COUNT(*) FILTER (
+            WHERE pp.id IS NOT NULL
+          ) AS payments_pending
         FROM assigned_accounts b
         LEFT JOIN pending_promises lp
           ON lp.cuenta_id = b.account_id
         LEFT JOIN pending_followups pf
           ON pf.cuenta_id = b.account_id
+        LEFT JOIN pending_payments pp
+          ON pp.cuenta_id = b.account_id
         GROUP BY b.usuario_id
       )
     `
@@ -240,6 +258,7 @@ function normalizeExecutiveAlertRow(row = {}) {
     promisesToday: countValue(row.promesas_hoy),
     followupsOverdue: countValue(row.seguimientos_vencidos),
     followupsToday: countValue(row.seguimientos_hoy),
+    paymentsPending: countValue(row.pagos_pendientes),
     lastActivityAt: row.ultima_actividad_at || null
   }
 }
@@ -260,7 +279,9 @@ function totalAlerts(executives) {
       followupsOverdue:
         totals.followupsOverdue + item.followupsOverdue,
       followupsToday:
-        totals.followupsToday + item.followupsToday
+        totals.followupsToday + item.followupsToday,
+      paymentsPending:
+        totals.paymentsPending + countValue(item.paymentsPending)
     }),
     {
       assigned: 0,
@@ -270,7 +291,8 @@ function totalAlerts(executives) {
       promisesOverdue: 0,
       promisesToday: 0,
       followupsOverdue: 0,
-      followupsToday: 0
+      followupsToday: 0,
+      paymentsPending: 0
     }
   )
 }
@@ -336,6 +358,7 @@ async function getPortfolioAlerts({
       COALESCE(s.promises_today, 0) AS promesas_hoy,
       COALESCE(s.followups_overdue, 0) AS seguimientos_vencidos,
       COALESCE(s.followups_today, 0) AS seguimientos_hoy,
+      COALESCE(s.payments_pending, 0) AS pagos_pendientes,
       a.last_activity_at AS ultima_actividad_at
     FROM eligible_executives e
     LEFT JOIN executive_stats s
@@ -430,6 +453,28 @@ async function getPortfolioAlerts({
           'America/Mexico_City')::DATE
         <= (CURRENT_TIMESTAMP AT TIME ZONE
           'America/Mexico_City')::DATE
+
+      UNION ALL
+
+      SELECT
+        'pago_reportado' AS alerta_tipo,
+        'hoy' AS severidad,
+        pp.reportado_at AS vence_at,
+        pp.gestion_id,
+        b.account_id AS cuenta_id,
+        b.client_name AS cliente_nombre,
+        b.id_cliente,
+        b.folio,
+        b.id_campania,
+        b.usuario_id AS ejecutivo_id,
+        e.nombre AS ejecutivo_nombre,
+        NULL::NUMERIC AS promesa_monto,
+        b.phone AS telefono
+      FROM assigned_accounts b
+      INNER JOIN eligible_executives e
+        ON e.id = b.usuario_id
+      INNER JOIN pending_payments pp
+        ON pp.cuenta_id = b.account_id
     ) alerts
     ORDER BY
       CASE alerts.severidad

@@ -601,6 +601,19 @@ export default function CarteraDrawer({
                   cartera, fecha y estado resultante.
                 </p>
 
+                {account.pago_validacion_estado === 'pendiente' && (
+                  <div className="mt-4 rounded-xl border border-amber-300 bg-amber-100 p-4 text-sm text-amber-900">
+                    <p className="font-bold">
+                      Pago reportado · pendiente de validación administrativa
+                    </p>
+                    <p className="mt-1">
+                      La cuenta permanece asignada, pero no admite otra
+                      gestión hasta que un administrador apruebe o rechace
+                      el reporte.
+                    </p>
+                  </div>
+                )}
+
                 <form
                   onSubmit={registerManagement}
                   className="mt-4 space-y-4"
@@ -641,6 +654,9 @@ export default function CarteraDrawer({
                         : ''}
                       {selectedTypification.requiere_seguimiento
                         ? ' · Requiere seguimiento'
+                        : ''}
+                      {selectedTypification.requiere_validacion_pago
+                        ? ' · Requiere validación administrativa'
                         : ''}
                     </div>
                   )}
@@ -813,19 +829,31 @@ export default function CarteraDrawer({
                   <label className="block text-sm font-bold">
                     Referencia de evidencia
                     <input
+                      required={
+                        selectedTypification?.requiere_validacion_pago
+                        === true
+                      }
                       value={management.evidencia}
                       onChange={event =>
                         updateManagement('evidencia', event.target.value)
                       }
                       maxLength={1000}
-                      placeholder="Opcional: folio, grabación o documento"
+                      placeholder={
+                        selectedTypification?.requiere_validacion_pago
+                          ? 'Obligatoria: folio, comprobante o documento'
+                          : 'Opcional: folio, grabación o documento'
+                      }
                       className="mt-1 w-full rounded-xl border bg-white p-3 font-normal"
                     />
                   </label>
 
                   <button
                     type="submit"
-                    disabled={saving || typifications.length === 0}
+                    disabled={
+                      saving
+                      || typifications.length === 0
+                      || account.pago_validacion_estado === 'pendiente'
+                    }
                     className="rounded-xl bg-orange-600 px-5 py-3 font-normal text-white disabled:bg-gray-300"
                   >
                     Registrar gestión

@@ -21,6 +21,7 @@ const EMPTY_FORM = {
   requiere_promesa: false,
   requiere_seguimiento: false,
   cierra_cuenta: false,
+  requiere_validacion_pago: false,
   orden: '100',
   activa: true
 }
@@ -51,6 +52,9 @@ function formFromTypification(item) {
     requiere_promesa: Boolean(item.requiere_promesa),
     requiere_seguimiento: Boolean(item.requiere_seguimiento),
     cierra_cuenta: Boolean(item.cierra_cuenta),
+    requiere_validacion_pago: Boolean(
+      item.requiere_validacion_pago
+    ),
     orden: String(item.orden),
     activa: Boolean(item.activa)
   }
@@ -65,6 +69,7 @@ function toPayload(form, includeCode = false) {
     requiere_promesa: form.requiere_promesa,
     requiere_seguimiento: form.requiere_seguimiento,
     cierra_cuenta: form.cierra_cuenta,
+    requiere_validacion_pago: form.requiere_validacion_pago,
     orden: Number(form.orden),
     activa: form.activa
   }
@@ -166,12 +171,27 @@ export default function CarteraTipificaciones() {
       value
     } = event.target
 
-    setForm(current => ({
-      ...current,
-      [name]: type === 'checkbox'
+    setForm(current => {
+      const nextValue = type === 'checkbox'
         ? checked
         : value
-    }))
+
+      if (name === 'requiere_validacion_pago' && checked) {
+        return {
+          ...current,
+          requiere_validacion_pago: true,
+          estado_resultante: 'pago_reportado',
+          requiere_promesa: false,
+          requiere_seguimiento: false,
+          cierra_cuenta: false
+        }
+      }
+
+      return {
+        ...current,
+        [name]: nextValue
+      }
+    })
   }
 
   const edit = item => {
@@ -405,12 +425,13 @@ export default function CarteraTipificaciones() {
             </select>
           </label>
 
-          <div className="grid gap-3 md:col-span-2 xl:col-span-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 md:col-span-2 xl:col-span-3 sm:grid-cols-2 xl:grid-cols-3">
             {[
               ['contacto_efectivo', 'Contacto efectivo'],
               ['requiere_promesa', 'Requiere promesa'],
               ['requiere_seguimiento', 'Requiere seguimiento'],
               ['cierra_cuenta', 'Cierra cuenta'],
+              ['requiere_validacion_pago', 'Valida pago'],
               ['activa', 'Activa']
             ].map(([name, label]) => (
               <label
@@ -541,6 +562,11 @@ export default function CarteraTipificaciones() {
                         </RuleBadge>
                         <RuleBadge active={item.cierra_cuenta}>
                           Cierre
+                        </RuleBadge>
+                        <RuleBadge
+                          active={item.requiere_validacion_pago}
+                        >
+                          Valida pago
                         </RuleBadge>
                       </div>
                     </td>

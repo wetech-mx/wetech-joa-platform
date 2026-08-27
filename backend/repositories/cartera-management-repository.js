@@ -285,6 +285,13 @@ function normalizeTypificationDefinition(
         defaultValue: false
       }
     ),
+    requiresPaymentValidation: normalizeBooleanField(
+      input.requiere_validacion_pago,
+      {
+        field: 'requiere validación de pago',
+        defaultValue: false
+      }
+    ),
     order: normalizeIntegerRange(
       input.orden,
       {
@@ -310,6 +317,31 @@ function normalizeTypificationDefinition(
     throw new CarteraManagementError(
       'CARTERA_TYPIFICATION_RULE_INVALID',
       'Una tipificación que cierra la cuenta no puede requerir seguimiento'
+    )
+  }
+
+  if (
+    definition.requiresPaymentValidation
+    && (
+      definition.state !== CARTERA_ESTADOS.PAGO_REPORTADO
+      || definition.closesAccount
+      || definition.requiresPromise
+      || definition.requiresFollowUp
+    )
+  ) {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_PAYMENT_RULE_INVALID',
+      'Un pago por validar debe usar el estado Pago reportado y no cerrar la cuenta ni requerir promesa o seguimiento'
+    )
+  }
+
+  if (
+    definition.state === CARTERA_ESTADOS.PAGO_REPORTADO
+    && !definition.requiresPaymentValidation
+  ) {
+    throw new CarteraManagementError(
+      'CARTERA_TYPIFICATION_PAYMENT_RULE_INVALID',
+      'El estado Pago reportado requiere validación administrativa'
     )
   }
 
@@ -484,7 +516,9 @@ function normalizeTypification(row) {
     state: row.estado_resultante,
     requiresPromise: row.requiere_promesa === true,
     requiresFollowUp: row.requiere_seguimiento === true,
-    closesAccount: row.cierra_cuenta === true
+    closesAccount: row.cierra_cuenta === true,
+    requiresPaymentValidation:
+      row.requiere_validacion_pago === true
   }
 }
 
@@ -549,6 +583,13 @@ function normalizePortfolioManagement(
     throw new CarteraManagementError(
       'CARTERA_MANAGEMENT_CONTENT_REQUIRED',
       'Debe registrar una nota o referencia de evidencia'
+    )
+  }
+
+  if (typification.requiresPaymentValidation && !evidence) {
+    throw new CarteraManagementError(
+      'CARTERA_PAYMENT_EVIDENCE_REQUIRED',
+      'La referencia de evidencia es obligatoria al reportar un pago'
     )
   }
 
@@ -655,6 +696,7 @@ async function listPortfolioTypifications({
       requiere_promesa,
       requiere_seguimiento,
       cierra_cuenta,
+      requiere_validacion_pago,
       orden
     FROM public.cartera_tipificaciones
     WHERE
@@ -713,6 +755,7 @@ async function listPortfolioTypificationsAdmin({
       requiere_promesa,
       requiere_seguimiento,
       cierra_cuenta,
+      requiere_validacion_pago,
       orden,
       activa,
       creada_at,
@@ -779,6 +822,7 @@ async function createPortfolioTypification({
         requiere_promesa,
         requiere_seguimiento,
         cierra_cuenta,
+        requiere_validacion_pago,
         orden,
         activa
       )
@@ -794,7 +838,8 @@ async function createPortfolioTypification({
         $8,
         $9,
         $10,
-        $11
+        $11,
+        $12
       )
       RETURNING
         id,
@@ -806,6 +851,7 @@ async function createPortfolioTypification({
         requiere_promesa,
         requiere_seguimiento,
         cierra_cuenta,
+        requiere_validacion_pago,
         orden,
         activa,
         creada_at,
@@ -821,6 +867,7 @@ async function createPortfolioTypification({
         definition.requiresPromise,
         definition.requiresFollowUp,
         definition.closesAccount,
+        definition.requiresPaymentValidation,
         definition.order,
         definition.active
       ]
@@ -867,8 +914,9 @@ async function updatePortfolioTypification({
         requiere_promesa = $7,
         requiere_seguimiento = $8,
         cierra_cuenta = $9,
-        orden = $10,
-        activa = $11,
+        requiere_validacion_pago = $10,
+        orden = $11,
+        activa = $12,
         actualizada_at = NOW()
       WHERE
         id = $1
@@ -883,6 +931,7 @@ async function updatePortfolioTypification({
         requiere_promesa,
         requiere_seguimiento,
         cierra_cuenta,
+        requiere_validacion_pago,
         orden,
         activa,
         creada_at,
@@ -898,6 +947,7 @@ async function updatePortfolioTypification({
         definition.requiresPromise,
         definition.requiresFollowUp,
         definition.closesAccount,
+        definition.requiresPaymentValidation,
         definition.order,
         definition.active
       ]
@@ -1100,6 +1150,20 @@ async function updatePortfolioState({
       maximum: 1000
     }
   )
+
+  if (
+    [
+      CARTERA_ESTADOS.PAGO_REPORTADO,
+      CARTERA_ESTADOS.PAGO_REALIZADO,
+      CARTERA_ESTADOS.CERRADO
+    ].includes(normalizedState)
+  ) {
+    throw new CarteraManagementError(
+      'CARTERA_STATE_WORKFLOW_REQUIRED',
+      'Ese estado solo puede alcanzarse mediante su flujo controlado',
+      409
+    )
+  }
 
   return withTransaction(
     pool,
@@ -1430,7 +1494,8 @@ async function registerPortfolioManagement({
           estado_resultante,
           requiere_promesa,
           requiere_seguimiento,
-          cierra_cuenta
+          cierra_cuenta,
+          requiere_validacion_pago
         FROM public.cartera_tipificaciones
         WHERE
           id = $1
@@ -1459,6 +1524,27 @@ async function registerPortfolioManagement({
         throw new CarteraManagementError(
           'CARTERA_ACCOUNT_INACTIVE',
           'La cuenta ya está cerrada o inactiva',
+          409
+        )
+      }
+
+      const pendingPayment = await client.query(
+        `
+        SELECT id
+        FROM public.cartera_pago_validaciones
+        WHERE
+          cuenta_id = $1
+          AND empresa_id = $2
+          AND estado = 'pendiente'
+        FOR SHARE
+        `,
+        [id, actor.empresaId]
+      )
+
+      if (pendingPayment.rows[0]) {
+        throw new CarteraManagementError(
+          'CARTERA_PAYMENT_VALIDATION_PENDING',
+          'La cuenta tiene un pago reportado pendiente de validación',
           409
         )
       }
@@ -1585,6 +1671,41 @@ async function registerPortfolioManagement({
 
       const record = created.rows[0]
 
+      let paymentValidation = null
+
+      if (management.typification.requiresPaymentValidation) {
+        const validation = await client.query(
+          `
+          INSERT INTO public.cartera_pago_validaciones
+          (
+            empresa_id,
+            gestion_id,
+            cuenta_id,
+            estado_cuenta_anterior,
+            reportado_por
+          )
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING
+            id,
+            gestion_id,
+            cuenta_id,
+            estado,
+            estado_cuenta_anterior,
+            reportado_por,
+            reportado_at
+          `,
+          [
+            actor.empresaId,
+            record.id,
+            id,
+            account.estado_gestion,
+            actor.actorId
+          ]
+        )
+
+        paymentValidation = validation.rows[0]
+      }
+
       await client.query(
         `
         INSERT INTO public.cartera_historial
@@ -1602,16 +1723,19 @@ async function registerPortfolioManagement({
           $1,
           $2,
           $3,
-          'gestion_registrada',
           $4,
-          $5::JSONB,
-          $6::JSONB
+          $5,
+          $6::JSONB,
+          $7::JSONB
         )
         `,
         [
           id,
           record.id,
           actor.actorId,
+          paymentValidation
+            ? 'pago_reportado'
+            : 'gestion_registrada',
           management.notes,
           JSON.stringify({
             estado: account.estado_gestion,
@@ -1627,6 +1751,10 @@ async function registerPortfolioManagement({
             prioridad: management.typification.priority,
             cierra_cuenta:
               management.typification.closesAccount,
+            requiere_validacion_pago:
+              management.typification.requiresPaymentValidation,
+            pago_validacion_id:
+              paymentValidation?.id ?? null,
             codigo_resultado: management.externalCode,
             promesa_monto: management.promiseAmount,
             promesa_fecha: management.promiseDate,
@@ -1638,6 +1766,7 @@ async function registerPortfolioManagement({
 
       return {
         management: record,
+        paymentValidation,
         account: {
           id,
           estado_gestion: management.typification.state,
@@ -1645,6 +1774,222 @@ async function registerPortfolioManagement({
             ? false
             : account.activa
         }
+      }
+    }
+  )
+}
+
+function normalizePaymentDecision(value) {
+  const decision = String(value ?? '')
+    .trim()
+    .toLowerCase()
+
+  if (!['aprobar', 'rechazar'].includes(decision)) {
+    throw new CarteraManagementError(
+      'CARTERA_PAYMENT_DECISION_INVALID',
+      'La decisión de pago debe ser aprobar o rechazar'
+    )
+  }
+
+  return decision
+}
+
+async function resolvePortfolioPaymentValidation({
+  pool,
+  usuario,
+  validationId,
+  decision,
+  notes
+}) {
+  const id = normalizeBigintId(validationId, 'id')
+  const actor = requireAdministrator(usuario)
+  const normalizedDecision = normalizePaymentDecision(decision)
+  const normalizedNotes = normalizeOptionalText(
+    notes,
+    {
+      field: 'notas de revisión',
+      maximum: 1000
+    }
+  )
+
+  if (normalizedDecision === 'rechazar' && !normalizedNotes) {
+    throw new CarteraManagementError(
+      'CARTERA_PAYMENT_REJECTION_NOTES_REQUIRED',
+      'Debe indicar el motivo del rechazo'
+    )
+  }
+
+  return withTransaction(
+    pool,
+    async client => {
+      const locked = await client.query(
+        `
+        SELECT
+          pv.id,
+          pv.gestion_id,
+          pv.cuenta_id,
+          pv.estado,
+          pv.estado_cuenta_anterior,
+          c.estado_gestion,
+          c.activa
+        FROM public.cartera_pago_validaciones pv
+        INNER JOIN public.cartera_cuentas c
+          ON c.id = pv.cuenta_id
+          AND c.empresa_id = pv.empresa_id
+        WHERE
+          pv.id = $1
+          AND pv.empresa_id = $2
+        FOR UPDATE OF pv, c
+        `,
+        [id, actor.empresaId]
+      )
+      const validation = locked.rows[0]
+
+      if (!validation) {
+        throw new CarteraManagementError(
+          'CARTERA_PAYMENT_VALIDATION_NOT_FOUND',
+          'La validación de pago no existe en la empresa',
+          404
+        )
+      }
+
+      if (validation.estado !== 'pendiente') {
+        throw new CarteraManagementError(
+          'CARTERA_PAYMENT_VALIDATION_RESOLVED',
+          'El pago reportado ya fue revisado',
+          409
+        )
+      }
+
+      if (
+        validation.estado_gestion
+          !== CARTERA_ESTADOS.PAGO_REPORTADO
+        || validation.activa !== true
+      ) {
+        throw new CarteraManagementError(
+          'CARTERA_PAYMENT_ACCOUNT_CONFLICT',
+          'La cuenta cambió y el pago no puede resolverse automáticamente',
+          409
+        )
+      }
+
+      const approved = normalizedDecision === 'aprobar'
+      const nextState = approved
+        ? CARTERA_ESTADOS.PAGO_REALIZADO
+        : validation.estado_cuenta_anterior
+
+      const reviewed = await client.query(
+        `
+        UPDATE public.cartera_pago_validaciones
+        SET
+          estado = $3,
+          revisado_por = $4,
+          notas_revision = $5,
+          revisado_at = NOW()
+        WHERE
+          id = $1
+          AND empresa_id = $2
+        RETURNING
+          id,
+          gestion_id,
+          cuenta_id,
+          estado,
+          estado_cuenta_anterior,
+          reportado_por,
+          revisado_por,
+          notas_revision,
+          reportado_at,
+          revisado_at
+        `,
+        [
+          id,
+          actor.empresaId,
+          approved ? 'aprobado' : 'rechazado',
+          actor.actorId,
+          normalizedNotes
+        ]
+      )
+
+      await client.query(
+        `
+        UPDATE public.cartera_cuentas
+        SET
+          estado_gestion = $2,
+          activa = $3,
+          actualizada_at = NOW()
+        WHERE id = $1
+        `,
+        [validation.cuenta_id, nextState, !approved]
+      )
+
+      if (approved) {
+        await client.query(
+          `
+          UPDATE public.cartera_asignaciones
+          SET
+            activa = FALSE,
+            finalizada_at = NOW()
+          WHERE
+            cuenta_id = $1
+            AND activa = TRUE
+          `,
+          [validation.cuenta_id]
+        )
+      }
+
+      const history = await client.query(
+        `
+        INSERT INTO public.cartera_historial
+        (
+          cuenta_id,
+          pago_validacion_id,
+          usuario_id,
+          evento,
+          detalle,
+          valor_anterior,
+          valor_nuevo
+        )
+        VALUES
+        (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6::JSONB,
+          $7::JSONB
+        )
+        RETURNING id
+        `,
+        [
+          validation.cuenta_id,
+          id,
+          actor.actorId,
+          approved
+            ? 'pago_validado'
+            : 'pago_rechazado',
+          normalizedNotes,
+          JSON.stringify({
+            estado: CARTERA_ESTADOS.PAGO_REPORTADO,
+            activa: true,
+            validacion: 'pendiente'
+          }),
+          JSON.stringify({
+            estado: nextState,
+            activa: !approved,
+            validacion: approved ? 'aprobado' : 'rechazado'
+          })
+        ]
+      )
+
+      return {
+        paymentValidation: reviewed.rows[0],
+        account: {
+          id: validation.cuenta_id,
+          estado_gestion: nextState,
+          activa: !approved
+        },
+        historyId: history.rows[0]?.id ?? null
       }
     }
   )
@@ -1669,6 +2014,7 @@ module.exports = {
   normalizeUserId,
   reassignPortfolioAccount,
   registerPortfolioManagement,
+  resolvePortfolioPaymentValidation,
   resolveActor,
   updatePortfolioTypification,
   updatePortfolioState,

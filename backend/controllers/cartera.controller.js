@@ -29,6 +29,7 @@ const {
   listPortfolioTypificationsAdmin,
   reassignPortfolioAccount,
   registerPortfolioManagement,
+  resolvePortfolioPaymentValidation,
   updatePortfolioTypification,
   updatePortfolioState
 } = require(
@@ -350,6 +351,25 @@ async function registrarGestionCartera(
   }
 }
 
+async function resolverValidacionPagoCartera(
+  req,
+  res
+) {
+  try {
+    const result = await resolvePortfolioPaymentValidation({
+      pool,
+      usuario: req.usuario,
+      validationId: req.params.id,
+      decision: req.body?.decision,
+      notes: req.body?.notas
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
 async function agregarNotaCartera(
   req,
   res
@@ -425,5 +445,6 @@ module.exports = {
   previsualizarImportacionCartera,
   reasignarCuentaCartera,
   registrarGestionCartera,
+  resolverValidacionPagoCartera,
   respondWithError
 }

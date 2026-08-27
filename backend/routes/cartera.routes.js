@@ -20,7 +20,8 @@ const {
   obtenerTipificacionesAdministracion,
   previsualizarImportacionCartera,
   reasignarCuentaCartera,
-  registrarGestionCartera
+  registrarGestionCartera,
+  resolverValidacionPagoCartera
 } = require('../controllers/cartera.controller')
 
 const {
@@ -161,7 +162,14 @@ router.post(
 )
 
 router.patch(
+  '/cartera/pagos/:id/validacion',
+  requiereAdmin,
+  resolverValidacionPagoCartera
+)
+
+router.patch(
   '/cartera/:id/estado',
+  requiereAdmin,
   actualizarEstadoCartera
 )
 

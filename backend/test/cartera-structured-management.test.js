@@ -194,6 +194,10 @@ test('registra gestión y estado dentro de una transacción', async () => {
         return { rows: [typification()] }
       }
 
+      if (text.includes('FROM public.cartera_pago_validaciones')) {
+        return { rows: [] }
+      }
+
       if (text.startsWith('UPDATE public.cartera_cuentas')) {
         assert.deepEqual(values, ['101', 'promesa_pago'])
         return { rows: [] }
@@ -216,7 +220,7 @@ test('registra gestión y estado dentro de una transacción', async () => {
 
       if (text.includes('INSERT INTO public.cartera_historial')) {
         assert.equal(values[1], '601')
-        assert.match(values[5], /promesa_parcial/)
+        assert.match(values[6], /promesa_parcial/)
         return { rows: [] }
       }
 
@@ -265,6 +269,10 @@ test('cierra la cuenta y finaliza la asignación cuando lo ordena el catálogo',
         }
       }
 
+      if (text.includes('FROM public.cartera_pago_validaciones')) {
+        return { rows: [] }
+      }
+
       if (text.startsWith('UPDATE public.cartera_cuentas')) {
         assert.deepEqual(values, ['101', 'cerrado'])
         assert.match(text, /activa = FALSE/)
@@ -290,8 +298,8 @@ test('cierra la cuenta y finaliza la asignación cuando lo ordena el catálogo',
 
       if (text.includes('INSERT INTO public.cartera_historial')) {
         assert.equal(values[1], '602')
-        assert.match(values[5], /\"activa\":false/)
-        assert.match(values[5], /\"cierra_cuenta\":true/)
+        assert.match(values[6], /\"activa\":false/)
+        assert.match(values[6], /\"cierra_cuenta\":true/)
         return { rows: [] }
       }
 

@@ -27,6 +27,7 @@ const CARTERA_ESTADOS = Object.freeze({
   PROMESA_PAGO: 'promesa_pago',
   PROMESA_INCUMPLIDA: 'promesa_incumplida',
   CONVENIO: 'convenio',
+  PAGO_REPORTADO: 'pago_reportado',
   PAGO_REALIZADO: 'pago_realizado',
   RECHAZO_PAGO: 'rechazo_pago',
   DATOS_INCORRECTOS: 'datos_incorrectos',

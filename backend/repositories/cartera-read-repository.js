@@ -789,6 +789,11 @@ function buildManagementListStatement({
         AND a.activa = TRUE
       LEFT JOIN public.usuarios gestor
         ON gestor.id = g.usuario_id
+      LEFT JOIN public.cartera_pago_validaciones pv
+        ON pv.gestion_id = g.id
+        AND pv.empresa_id = g.empresa_id
+      LEFT JOIN public.usuarios revisor_pago
+        ON revisor_pago.id = pv.revisado_por
       INNER JOIN public.crm_origenes o
         ON o.id = c.origen_id
         AND o.empresa_id = c.empresa_id
@@ -865,6 +870,13 @@ async function listPortfolioManagements({
       g.notas,
       g.evidencia,
       g.creada_at,
+      pv.id AS pago_validacion_id,
+      pv.estado AS pago_validacion_estado,
+      pv.notas_revision AS pago_validacion_notas,
+      pv.reportado_at AS pago_reportado_at,
+      pv.revisado_at AS pago_revisado_at,
+      pv.revisado_por AS pago_revisado_por,
+      revisor_pago.nombre AS pago_revisor_nombre,
       g.usuario_id AS gestor_id,
       gestor.nombre AS gestor_nombre,
       c.origen_id,
@@ -1195,7 +1207,10 @@ async function getPortfolioAccount({
       a.metodo AS asignacion_metodo,
       a.motivo AS asignacion_motivo,
       a.asignada_at,
-      u.nombre AS ejecutivo_nombre
+      u.nombre AS ejecutivo_nombre,
+      pago_pendiente.id AS pago_validacion_id,
+      pago_pendiente.estado AS pago_validacion_estado,
+      pago_pendiente.reportado_at AS pago_reportado_at
     FROM public.cartera_cuentas c
     LEFT JOIN public.cartera_snapshots s
       ON s.cuenta_id = c.id
@@ -1206,6 +1221,19 @@ async function getPortfolioAccount({
       AND a.activa = TRUE
     LEFT JOIN public.usuarios u
       ON u.id = a.usuario_id
+    LEFT JOIN LATERAL (
+      SELECT
+        pv.id,
+        pv.estado,
+        pv.reportado_at
+      FROM public.cartera_pago_validaciones pv
+      WHERE
+        pv.cuenta_id = c.id
+        AND pv.empresa_id = c.empresa_id
+        AND pv.estado = 'pendiente'
+      ORDER BY pv.reportado_at DESC, pv.id DESC
+      LIMIT 1
+    ) pago_pendiente ON TRUE
     INNER JOIN public.crm_origenes o
       ON o.id = c.origen_id
       AND o.empresa_id = c.empresa_id

@@ -281,8 +281,9 @@ test('suma el resumen sin aceptar contadores inválidos', () => {
     newAssignments: 4,
     promisesOverdue: 3,
     promisesToday: 3,
-    followupsOverdue: 3,
-    followupsToday: 6
+      followupsOverdue: 3,
+      followupsToday: 6,
+      paymentsPending: 0
   })
 })
 

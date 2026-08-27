@@ -28,6 +28,10 @@ export const CARTERA_ESTADOS = [
     label: 'Convenio'
   },
   {
+    value: 'pago_reportado',
+    label: 'Pago reportado · pendiente de validación'
+  },
+  {
     value: 'pago_realizado',
     label: 'Pago realizado'
   },

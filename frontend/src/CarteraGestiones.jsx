@@ -99,7 +99,10 @@ export default function CarteraGestiones({ usuario }) {
   const [origins, setOrigins] = useState([])
   const [selectedAccountId, setSelectedAccountId] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [resolvingId, setResolvingId] = useState(null)
+  const [reviewNotes, setReviewNotes] = useState({})
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
   const [refreshVersion, setRefreshVersion] = useState(0)
 
   const channelLabels = useMemo(
@@ -231,6 +234,63 @@ export default function CarteraGestiones({ usuario }) {
   const refresh = useCallback(() => {
     setRefreshVersion(value => value + 1)
   }, [])
+
+  const resolvePayment = async (row, decision) => {
+    const notes = String(reviewNotes[row.id] || '').trim()
+
+    if (decision === 'rechazar' && !notes) {
+      setError('Indique el motivo para rechazar el pago reportado.')
+      return
+    }
+
+    const action = decision === 'aprobar' ? 'aprobar' : 'rechazar'
+
+    if (!window.confirm(
+      `¿Confirma ${action} el pago reportado de ${row.cliente_nombre || row.id_cliente}?`
+    )) {
+      return
+    }
+
+    setResolvingId(row.id)
+    setError('')
+    setMessage('')
+
+    try {
+      const response = await apiFetch(
+        `/crm-api/cartera/pagos/${row.pago_validacion_id}/validacion`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            decision,
+            notas: notes || null
+          })
+        }
+      )
+
+      await readJson(
+        response,
+        'No fue posible resolver la validación de pago'
+      )
+
+      setMessage(
+        decision === 'aprobar'
+          ? 'Pago aprobado. La cuenta quedó cerrada y auditada.'
+          : 'Pago rechazado. La cuenta regresó a su estado anterior.'
+      )
+      setReviewNotes(current => ({
+        ...current,
+        [row.id]: ''
+      }))
+      refresh()
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setResolvingId(null)
+    }
+  }
 
   return (
     <section className="min-w-0">
@@ -383,6 +443,15 @@ export default function CarteraGestiones({ usuario }) {
         </div>
       )}
 
+      {message && (
+        <div
+          role="status"
+          className="mt-6 rounded-2xl border border-green-300 bg-green-50 p-4 text-green-700"
+        >
+          {message}
+        </div>
+      )}
+
       <div className="mt-6 overflow-hidden rounded-3xl bg-white shadow">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
           <div>
@@ -419,7 +488,7 @@ export default function CarteraGestiones({ usuario }) {
 
         {rows.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="min-w-[1500px] w-full text-sm">
+            <table className="min-w-[1750px] w-full text-sm">
               <thead className="bg-gray-50 text-left">
                 <tr>
                   <th className="p-4">Fecha</th>
@@ -430,13 +499,21 @@ export default function CarteraGestiones({ usuario }) {
                   <th className="p-4">Seguimiento</th>
                   <th className="p-4">Ejecutivo</th>
                   <th className="p-4">Notas</th>
+                  <th className="p-4">Validación de pago</th>
                   <th className="p-4">Acción</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y align-top">
                 {rows.map(row => (
-                  <tr key={row.id} className="hover:bg-orange-50/40">
+                  <tr
+                    key={row.id}
+                    className={
+                      row.pago_validacion_estado === 'pendiente'
+                        ? 'bg-amber-50 hover:bg-amber-100/60'
+                        : 'hover:bg-orange-50/40'
+                    }
+                  >
                     <td className="p-4 whitespace-nowrap">
                       {formatDateTime(row.creada_at)}
                     </td>
@@ -504,6 +581,81 @@ export default function CarteraGestiones({ usuario }) {
                       <p className="line-clamp-3">
                         {row.notas || row.evidencia || '—'}
                       </p>
+                      {row.evidencia && (
+                        <p className="mt-2 text-xs font-bold text-blue-700">
+                          Evidencia: {row.evidencia}
+                        </p>
+                      )}
+                    </td>
+                    <td className="p-4 min-w-72">
+                      {!row.pago_validacion_estado && '—'}
+
+                      {row.pago_validacion_estado === 'pendiente' && (
+                        <div>
+                          <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                            Pago pendiente de validar
+                          </span>
+                          <textarea
+                            value={reviewNotes[row.id] || ''}
+                            onChange={event => setReviewNotes(current => ({
+                              ...current,
+                              [row.id]: event.target.value
+                            }))}
+                            maxLength={1000}
+                            rows={2}
+                            placeholder="Nota de revisión; obligatoria al rechazar"
+                            className="mt-3 w-full rounded-lg border bg-white p-2 text-sm"
+                          />
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              disabled={resolvingId === row.id}
+                              onClick={() => resolvePayment(row, 'aprobar')}
+                              className="rounded-lg bg-green-600 px-3 py-2 font-bold text-white hover:bg-green-700 disabled:opacity-50"
+                            >
+                              Aprobar y cerrar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={resolvingId === row.id}
+                              onClick={() => resolvePayment(row, 'rechazar')}
+                              className="rounded-lg bg-red-600 px-3 py-2 font-bold text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              Rechazar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {row.pago_validacion_estado === 'aprobado' && (
+                        <div>
+                          <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+                            Pago aprobado
+                          </span>
+                          <p className="mt-2 text-xs text-gray-500">
+                            {row.pago_revisor_nombre || 'Administrador'} · {formatDateTime(row.pago_revisado_at)}
+                          </p>
+                          {row.pago_validacion_notas && (
+                            <p className="mt-1 text-xs text-gray-600">
+                              {row.pago_validacion_notas}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {row.pago_validacion_estado === 'rechazado' && (
+                        <div>
+                          <span className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+                            Pago rechazado
+                          </span>
+                          <p className="mt-2 text-xs text-gray-500">
+                            {row.pago_revisor_nombre || 'Administrador'} · {formatDateTime(row.pago_revisado_at)}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-600">
+                            {row.pago_validacion_notas || 'Sin nota'}
+                          </p>
+                        </div>
+                      )}
                     </td>
                     <td className="p-4">
                       <button

@@ -80,9 +80,10 @@ test('publica el catálogo autorizado de estados', () => {
       'no_localizado',
       'seguimiento',
       'promesa_pago',
-      'promesa_incumplida',
-      'convenio',
-      'pago_realizado',
+    'promesa_incumplida',
+    'convenio',
+    'pago_reportado',
+    'pago_realizado',
       'rechazo_pago',
       'datos_incorrectos',
       'cerrado'

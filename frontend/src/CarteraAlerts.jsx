@@ -17,14 +17,16 @@ const EMPTY_TOTALS = {
   promisesOverdue: 0,
   promisesToday: 0,
   followupsOverdue: 0,
-  followupsToday: 0
+  followupsToday: 0,
+  paymentsPending: 0
 }
 
 const ALERT_LABELS = {
   promesa_vencida: 'Promesa vencida',
   promesa_hoy: 'Promesa para hoy',
   seguimiento_vencido: 'Seguimiento vencido',
-  seguimiento_hoy: 'Seguimiento para hoy'
+  seguimiento_hoy: 'Seguimiento para hoy',
+  pago_reportado: 'Pago por validar'
 }
 
 function formatNumber(value) {
@@ -198,6 +200,9 @@ export default function CarteraAlerts({
             <span className="rounded-full bg-amber-100 px-3 py-1 font-bold text-amber-800">
               {formatNumber(dueToday)} para hoy
             </span>
+            <span className="rounded-full bg-blue-100 px-3 py-1 font-bold text-blue-700">
+              {formatNumber(totals.paymentsPending)} pagos por validar
+            </span>
           </div>
         )}
       </div>
@@ -219,7 +224,7 @@ export default function CarteraAlerts({
 
       {!loading && !error && (
         <>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
             <PendingMetric
               label="Sin gestionar"
               value={totals.unmanaged}
@@ -255,11 +260,16 @@ export default function CarteraAlerts({
               value={totals.followupsToday}
               tone="purple"
             />
+            <PendingMetric
+              label="Pagos por validar"
+              value={totals.paymentsPending}
+              tone="blue"
+            />
           </div>
 
           {!isExecutive && (
             <div className="mt-6 overflow-x-auto rounded-2xl border">
-              <table className="min-w-[1120px] w-full text-sm">
+              <table className="min-w-[1280px] w-full text-sm">
                 <thead className="bg-gray-50 text-left">
                   <tr>
                     <th className="p-3">Ejecutivo</th>
@@ -269,6 +279,7 @@ export default function CarteraAlerts({
                     <th className="p-3 text-right">Promesas vencidas</th>
                     <th className="p-3 text-right">Seguimientos vencidos</th>
                     <th className="p-3 text-right">Para hoy</th>
+                    <th className="p-3 text-right">Pagos por validar</th>
                     <th className="p-3">Última actividad</th>
                   </tr>
                 </thead>
@@ -279,6 +290,7 @@ export default function CarteraAlerts({
                       + item.followupsOverdue
                       + item.promisesToday
                       + item.followupsToday
+                      + item.paymentsPending
                     )
 
                     return (
@@ -318,6 +330,9 @@ export default function CarteraAlerts({
                           + item.followupsToday
                         )}
                       </td>
+                      <td className="p-3 text-right font-bold text-blue-700">
+                        {formatNumber(item.paymentsPending)}
+                      </td>
                       <td className="p-3 text-gray-600">
                         {formatDateTime(item.lastActivityAt)}
                       </td>
@@ -340,12 +355,12 @@ export default function CarteraAlerts({
               Pendientes que requieren atención
             </h4>
             <p className="mt-1 text-sm text-gray-500">
-              Se muestran primero los vencidos y después los programados para hoy.
+              Se muestran vencidos, programados para hoy y pagos por validar.
             </p>
 
             {items.length === 0 ? (
               <p className="mt-4 rounded-2xl bg-green-50 p-4 text-sm text-green-700">
-                No hay promesas ni seguimientos vencidos o programados para hoy.
+                No hay promesas, seguimientos ni pagos que requieran atención.
               </p>
             ) : (
               <div className="mt-4 divide-y overflow-hidden rounded-2xl border">
@@ -358,7 +373,9 @@ export default function CarteraAlerts({
                       <div className="flex flex-wrap items-center gap-2">
                         <AlertBadge item={item} />
                         <span className="text-sm text-gray-500">
-                          {formatDate(item.dueAt)}
+                          {item.type === 'pago_reportado'
+                            ? formatDateTime(item.dueAt)
+                            : formatDate(item.dueAt)}
                         </span>
                       </div>
                       <p className="mt-2 font-bold">
