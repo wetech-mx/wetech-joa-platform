@@ -37,6 +37,9 @@ function buildPortfolioAlertStatement({
     'c.empresa_id = $1',
     'c.activa = TRUE'
   ]
+  const historicalAccountConditions = [
+    'history_account.empresa_id = $1'
+  ]
 
   if (scope.isExecutive) {
     values.push(scope.userId)
@@ -49,6 +52,9 @@ function buildPortfolioAlertStatement({
     values.push(originId)
     accountConditions.push(
       `c.origen_id = $${values.length}`
+    )
+    historicalAccountConditions.push(
+      `history_account.origen_id = $${values.length}`
     )
   }
 
@@ -142,23 +148,34 @@ function buildPortfolioAlertStatement({
           seguimiento_estado = 'pendiente'
           AND proximo_seguimiento_at IS NOT NULL
       ),
+      historical_activity AS (
+        SELECT
+          g.usuario_id,
+          g.creada_at
+        FROM public.cartera_gestiones g
+        INNER JOIN public.cartera_cuentas history_account
+          ON history_account.id = g.cuenta_id
+        INNER JOIN eligible_executives e
+          ON e.id = g.usuario_id
+        WHERE
+          g.empresa_id = $1
+          AND ${historicalAccountConditions.join('\n          AND ')}
+      ),
       executive_activity AS (
         SELECT
-          b.usuario_id,
-          COUNT(g.id) FILTER (
+          e.id AS usuario_id,
+          COUNT(h.creada_at) FILTER (
             WHERE
-              (g.creada_at AT TIME ZONE
+              (h.creada_at AT TIME ZONE
                 'America/Mexico_City')::DATE
               = (CURRENT_TIMESTAMP AT TIME ZONE
                 'America/Mexico_City')::DATE
           ) AS managed_today,
-          MAX(g.creada_at) AS last_activity_at
-        FROM assigned_accounts b
-        LEFT JOIN public.cartera_gestiones g
-          ON g.cuenta_id = b.account_id
-          AND g.usuario_id = b.usuario_id
-          AND g.empresa_id = $1
-        GROUP BY b.usuario_id
+          MAX(h.creada_at) AS last_activity_at
+        FROM eligible_executives e
+        LEFT JOIN historical_activity h
+          ON h.usuario_id = e.id
+        GROUP BY e.id
       ),
       executive_stats AS (
         SELECT

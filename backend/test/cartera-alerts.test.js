@@ -86,9 +86,43 @@ test('el origen se agrega como parámetro y no como SQL', () => {
     ]
   )
   assert.match(statement.ctes, /c\.origen_id = \$3/)
+  assert.match(
+    statement.ctes,
+    /history_account\.origen_id = \$3/
+  )
   assert.doesNotMatch(
     statement.ctes,
     /9007199254740993/
+  )
+})
+
+test('la última actividad conserva gestiones de cuentas cerradas', () => {
+  const statement = buildPortfolioAlertStatement({
+    scope: {
+      empresaId: 7,
+      userId: 2,
+      isExecutive: false
+    }
+  })
+  const activityBlock = statement.ctes
+    .split('executive_activity AS (')[1]
+    .split('executive_stats AS (')[0]
+
+  assert.match(
+    statement.ctes,
+    /historical_activity AS \([\s\S]*FROM public\.cartera_gestiones g/
+  )
+  assert.match(
+    statement.ctes,
+    /INNER JOIN public\.cartera_cuentas history_account/
+  )
+  assert.match(
+    statement.ctes,
+    /MAX\(h\.creada_at\) AS last_activity_at/
+  )
+  assert.doesNotMatch(
+    activityBlock,
+    /FROM assigned_accounts b|GROUP BY b\.usuario_id/
   )
 })
 
