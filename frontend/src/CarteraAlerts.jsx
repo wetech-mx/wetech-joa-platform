@@ -273,10 +273,29 @@ export default function CarteraAlerts({
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {executives.map(item => (
-                    <tr key={item.id}>
-                      <td className="p-3 font-bold">
-                        {item.name}
+                  {executives.map(item => {
+                    const pendingCount = (
+                      item.promisesOverdue
+                      + item.followupsOverdue
+                      + item.promisesToday
+                      + item.followupsToday
+                    )
+
+                    return (
+                    <tr
+                      key={item.id}
+                      className={pendingCount > 0
+                        ? 'bg-amber-50'
+                        : ''}
+                    >
+                      <td className="p-3">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 font-bold text-blue-900">
+                          <span
+                            aria-hidden="true"
+                            className="h-2 w-2 rounded-full bg-blue-600"
+                          />
+                          {item.name}
+                        </span>
                       </td>
                       <td className="p-3 text-right">
                         {formatNumber(item.assigned)}
@@ -303,7 +322,8 @@ export default function CarteraAlerts({
                         {formatDateTime(item.lastActivityAt)}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
 
@@ -344,13 +364,20 @@ export default function CarteraAlerts({
                       <p className="mt-2 font-bold">
                         {item.clientName}
                       </p>
+                      {!isExecutive && (
+                        <div className="mt-2 inline-flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-blue-900">
+                          <span className="text-xs font-bold uppercase tracking-wide text-blue-600">
+                            Ejecutivo responsable
+                          </span>
+                          <span className="font-bold">
+                            {item.executiveName}
+                          </span>
+                        </div>
+                      )}
                       <p className="mt-1 text-xs text-gray-500">
                         Folio: {item.folio || '—'}
                         {' · '}
                         Campaña: {item.campaign || '—'}
-                        {!isExecutive && (
-                          ` · Ejecutivo: ${item.executiveName}`
-                        )}
                       </p>
                       {item.amount !== null && (
                         <p className="mt-1 text-sm font-bold text-orange-700">

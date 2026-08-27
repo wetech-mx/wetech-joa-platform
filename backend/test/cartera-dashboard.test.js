@@ -79,3 +79,15 @@ test('la pantalla Dashboard incorpora las métricas de cartera', () => {
     /<CarteraDashboard[\s\S]*onOpenAccount=\{openPortfolioAccount\}[\s\S]*\/>/
   )
 })
+
+test('la supervisión resalta al Ejecutivo responsable', () => {
+  const alerts = read('frontend/src/CarteraAlerts.jsx')
+
+  assert.match(alerts, /Ejecutivo responsable/)
+  assert.match(alerts, /border-blue-200 bg-blue-50/)
+  assert.match(alerts, /pendingCount > 0/)
+  assert.doesNotMatch(
+    alerts,
+    /` · Ejecutivo: \$\{item\.executiveName\}`/
+  )
+})
