@@ -288,7 +288,7 @@ export default function Cartera({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-orange-600">
-            MÓDULO V0.7.0
+            MÓDULO V0.8.0
           </p>
           <h1 className="mt-1 text-4xl font-bold">
             {selectedOrigin

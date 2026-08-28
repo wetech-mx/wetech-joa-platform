@@ -43,6 +43,25 @@ test('la pantalla ya no permite cambiar estado manualmente', () => {
   assert.match(drawer, /Registrar gestión/)
 })
 
+test('el expediente organiza la operación en pestañas sin perder detalle', () => {
+  const drawer = source('CarteraDrawer.jsx')
+  const portfolio = source('Cartera.jsx')
+
+  assert.match(drawer, /DRAWER_TABS/)
+  assert.match(drawer, /Resumen/)
+  assert.match(drawer, /Detalles/)
+  assert.match(drawer, /Gestiones/)
+  assert.match(drawer, /Auditoría/)
+  assert.match(drawer, /Ejecutivo responsable/)
+  assert.match(drawer, /Información clave para gestionar/)
+  assert.match(drawer, /Expediente completo de origen/)
+  assert.match(drawer, /history\.find/)
+  assert.match(drawer, /Última gestión registrada/)
+  assert.match(drawer, /Sin gestiones registradas/)
+  assert.doesNotMatch(drawer, /Actividad más reciente/)
+  assert.match(portfolio, /MÓDULO V0\.8\.0/)
+})
+
 test('supervisión consulta y filtra gestiones estructuradas', () => {
   const managements = source('CarteraGestiones.jsx')
   const app = source('App.jsx')

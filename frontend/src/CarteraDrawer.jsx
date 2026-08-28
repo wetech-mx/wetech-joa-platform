@@ -47,6 +47,60 @@ function DetailItem({
   )
 }
 
+const DRAWER_TABS = [
+  { id: 'summary', label: 'Resumen' },
+  { id: 'details', label: 'Detalles' },
+  { id: 'management', label: 'Gestiones' },
+  { id: 'audit', label: 'Auditoría' }
+]
+
+function SummaryMetric({
+  label,
+  value,
+  tone = 'slate'
+}) {
+  const toneClass = {
+    slate: 'border-slate-200 bg-slate-50 text-slate-900',
+    blue: 'border-blue-200 bg-blue-50 text-blue-900',
+    orange: 'border-orange-200 bg-orange-50 text-orange-900',
+    red: 'border-red-200 bg-red-50 text-red-900'
+  }[tone]
+
+  return (
+    <div className={`rounded-2xl border p-4 ${toneClass}`}>
+      <p className="text-xs font-bold uppercase tracking-wide opacity-70">
+        {label}
+      </p>
+      <p className="mt-2 break-words text-xl font-normal">
+        {value ?? '—'}
+      </p>
+    </div>
+  )
+}
+
+function DrawerTab({
+  active,
+  children,
+  onClick
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={[
+        'min-w-max border-b-2 px-4 py-3 text-sm font-bold transition',
+        active
+          ? 'border-orange-600 text-orange-700'
+          : 'border-transparent text-gray-500 hover:text-gray-900'
+      ].join(' ')}
+    >
+      {children}
+    </button>
+  )
+}
+
 const SOURCE_DETAIL_SECTIONS = [
   {
     title: 'Cliente',
@@ -210,6 +264,7 @@ export default function CarteraDrawer({
   )
   const [executiveId, setExecutiveId] = useState('')
   const [reason, setReason] = useState('')
+  const [activeTab, setActiveTab] = useState('summary')
 
   const isAdministrator = usuario?.rol !== 'Ejecutivo'
 
@@ -408,29 +463,67 @@ export default function CarteraDrawer({
 
   const account = detail?.account
   const history = detail?.history || []
+  const latestManagement = history.find(
+    item => item.gestion_id
+  ) || null
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-      <div className="h-full w-full max-w-3xl overflow-y-auto bg-white shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-6 py-5">
-          <div>
+      <div className="h-full w-full max-w-6xl overflow-y-auto bg-white shadow-2xl">
+        <header className="sticky top-0 z-20 border-b bg-white/95 backdrop-blur">
+          <div className="flex items-start justify-between gap-4 px-5 py-4 sm:px-6">
+            <div className="min-w-0">
             <p className="text-xs font-bold text-orange-600">
-              DETALLE DE CUENTA
+              EXPEDIENTE DE CUENTA
             </p>
-            <h2 className="text-2xl font-bold">
+            <h2 className="mt-1 truncate text-2xl font-bold">
               {account?.nombre || 'Cargando cuenta…'}
             </h2>
+              {account && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="rounded-full bg-blue-50 px-3 py-1 font-bold text-blue-800 ring-1 ring-blue-200">
+                    Ejecutivo: {account.ejecutivo_nombre || 'Sin asignar'}
+                  </span>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-700">
+                    {CARTERA_ESTADO_LABEL[account.estado_gestion]
+                      || account.estado_gestion}
+                  </span>
+                  <span className="text-gray-500">
+                    {account.id_campania || 'Sin campaña'} · {account.folio || 'Sin folio'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar detalle"
+              className="shrink-0 rounded-lg bg-gray-900 px-4 py-2 font-normal text-white"
+            >
+              Cerrar
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar detalle"
-            className="rounded-lg bg-gray-900 px-4 py-2 font-normal text-white"
-          >
-            Cerrar
-          </button>
-        </div>
+          {account && (
+            <nav
+              role="tablist"
+              aria-label="Secciones del expediente"
+              className="flex overflow-x-auto border-t px-2 sm:px-4"
+            >
+              {DRAWER_TABS.map(tab => (
+                <DrawerTab
+                  key={tab.id}
+                  active={activeTab === tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                  {tab.id === 'audit' ? ` (${history.length})` : ''}
+                </DrawerTab>
+              ))}
+            </nav>
+          )}
+        </header>
 
         <div className="space-y-6 p-6">
           {loading && (
@@ -459,7 +552,182 @@ export default function CarteraDrawer({
 
           {account && (
             <>
-              <section>
+              {activeTab === 'summary' && (
+                <section
+                  role="tabpanel"
+                  aria-label="Resumen de la cuenta"
+                  className="space-y-5"
+                >
+                  {account.pago_validacion_estado === 'pendiente' && (
+                    <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+                      <p className="font-bold">
+                        Pago reportado pendiente de validación
+                      </p>
+                      <p className="mt-1 text-sm">
+                        La cuenta permanece asignada y no admite otra gestión
+                        hasta que un administrador resuelva el reporte.
+                      </p>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
+                      Vista rápida
+                    </p>
+                    <h3 className="mt-1 text-2xl font-bold">
+                      Información clave para gestionar
+                    </h3>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <SummaryMetric
+                      label="Saldo total"
+                      value={formatMoney(account.saldo)}
+                      tone="blue"
+                    />
+                    <SummaryMetric
+                      label="Pago requerido"
+                      value={formatMoney(account.pago_requerido)}
+                      tone="orange"
+                    />
+                    <SummaryMetric
+                      label="Atraso"
+                      value={`${account.dias_atraso ?? '—'} días · ${account.semanas_atraso ?? '—'} semanas`}
+                      tone="red"
+                    />
+                    <SummaryMetric
+                      label="Fecha de cartera"
+                      value={formatDate(account.ultima_fecha_cartera)}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <article className="rounded-2xl border p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                            Ejecutivo responsable
+                          </p>
+                          <p className="mt-2 text-xl font-bold text-blue-900">
+                            {account.ejecutivo_nombre || 'Sin asignar'}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-800 ring-1 ring-blue-200">
+                          Asignación activa
+                        </span>
+                      </div>
+                      <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+                        <div>
+                          <dt className="text-gray-500">Campaña</dt>
+                          <dd className="mt-1 break-words font-bold">
+                            {account.id_campania || 'Sin campaña'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-gray-500">Folio</dt>
+                          <dd className="mt-1 break-words font-bold">
+                            {account.folio || '—'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-gray-500">ID cliente</dt>
+                          <dd className="mt-1 break-words font-bold">
+                            {account.id_cliente || '—'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-gray-500">Estado</dt>
+                          <dd className="mt-1 font-bold">
+                            {CARTERA_ESTADO_LABEL[account.estado_gestion]
+                              || account.estado_gestion}
+                          </dd>
+                        </div>
+                      </dl>
+                    </article>
+
+                    <article className="rounded-2xl border p-5">
+                      <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                        Contacto inmediato
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {[1, 2, 3, 4].map(index => {
+                          const phone = account[`telefono_${index}`]
+
+                          return phone ? (
+                            <a
+                              key={index}
+                              href={`tel:${phone}`}
+                              className="rounded-xl bg-green-50 px-3 py-2 font-bold text-green-800 ring-1 ring-green-200 hover:bg-green-100"
+                            >
+                              Tel. {index}: {phone}
+                            </a>
+                          ) : null
+                        })}
+                      </div>
+                      <p className="mt-5 text-xs font-bold uppercase tracking-wide text-gray-500">
+                        Última gestión registrada
+                      </p>
+                      {latestManagement ? (
+                        <div className="mt-2 rounded-xl bg-gray-50 p-3">
+                          <p className="font-bold">
+                            {latestManagement.tipificacion_nombre
+                              || latestManagement.evento}
+                          </p>
+                          <p className="mt-1 text-sm text-gray-600">
+                            {formatDateTime(latestManagement.creada_at)} ·{' '}
+                            {latestManagement.usuario_nombre || 'Sistema'}
+                          </p>
+                          {latestManagement.persona_contactada && (
+                            <p className="mt-1 text-sm text-gray-600">
+                              Contacto: {latestManagement.persona_contactada}
+                              {latestManagement.relacion_contacto
+                                ? ` · ${latestManagement.relacion_contacto}`
+                                : ''}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mt-2 rounded-xl bg-gray-50 p-3 text-sm text-gray-500">
+                          Sin gestiones registradas.
+                        </p>
+                      )}
+                    </article>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 border-t pt-5">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('management')}
+                      className="rounded-xl bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
+                    >
+                      Ir a registrar gestión
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('details')}
+                      className="rounded-xl border px-5 py-3 font-bold hover:bg-gray-50"
+                    >
+                      Consultar expediente completo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('audit')}
+                      className="rounded-xl border px-5 py-3 font-bold hover:bg-gray-50"
+                    >
+                      Ver auditoría
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              <div
+                role="tabpanel"
+                aria-label="Detalles de la cuenta"
+                className={activeTab === 'details'
+                  ? 'space-y-6'
+                  : 'hidden'}
+              >
+                <section>
                 <h3 className="mb-3 text-lg font-bold">
                   Identidad y asignación
                 </h3>
@@ -569,7 +837,7 @@ export default function CarteraDrawer({
                 </div>
               </section>
 
-              {account.datos_origen
+                {account.datos_origen
                 && Object.keys(account.datos_origen).length > 0
                 && (
                   <section>
@@ -591,8 +859,16 @@ export default function CarteraDrawer({
                     </div>
                   </section>
                 )}
+              </div>
 
-              <section className="rounded-2xl border border-orange-200 bg-orange-50/40 p-5">
+              <div
+                role="tabpanel"
+                aria-label="Gestiones de la cuenta"
+                className={activeTab === 'management'
+                  ? 'space-y-6'
+                  : 'hidden'}
+              >
+                <section className="rounded-2xl border border-orange-200 bg-orange-50/40 p-5">
                 <h3 className="text-lg font-bold">
                   Registrar gestión
                 </h3>
@@ -908,9 +1184,26 @@ export default function CarteraDrawer({
                   </form>
                 </section>
               )}
+              </div>
 
-              <section>
-                <h3 className="text-lg font-bold">Historial</h3>
+              <section
+                role="tabpanel"
+                aria-label="Auditoría de la cuenta"
+                className={activeTab === 'audit' ? '' : 'hidden'}
+              >
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
+                      Trazabilidad completa
+                    </p>
+                    <h3 className="mt-1 text-2xl font-bold">
+                      Auditoría e historial
+                    </h3>
+                  </div>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600">
+                    {history.length} movimientos
+                  </span>
+                </div>
 
                 {history.length === 0 && (
                   <p className="mt-3 rounded-xl bg-gray-50 p-4 text-gray-500">
@@ -920,7 +1213,10 @@ export default function CarteraDrawer({
 
                 <div className="mt-3 space-y-3">
                   {history.map(item => (
-                    <article key={item.id} className="rounded-xl border p-4">
+                    <article
+                      key={item.id}
+                      className="rounded-2xl border p-4 sm:p-5"
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <p className="font-bold">
                           {item.tipificacion_nombre || item.evento}
