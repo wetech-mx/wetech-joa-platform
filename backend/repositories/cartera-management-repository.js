@@ -1289,13 +1289,21 @@ async function reassignPortfolioAccount({
   return withTransaction(
     pool,
     async client => {
-      await lockAccessibleAccount(
+      const account = await lockAccessibleAccount(
         client,
         {
           accountId: id,
           actor
         }
       )
+
+      if (account.activa === false) {
+        throw new CarteraManagementError(
+          'CARTERA_ACCOUNT_INACTIVE',
+          'La cuenta ya está cerrada o inactiva',
+          409
+        )
+      }
 
       const executive = await client.query(
         `

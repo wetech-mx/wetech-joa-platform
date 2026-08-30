@@ -312,6 +312,45 @@ test('Ejecutivo no puede reasignar cuentas', async () => {
   assert.equal(pool.calls.length, 0)
 })
 
+test('rechaza reasignar una cuenta cerrada', async () => {
+  const pool = transactionPool(
+    async text => {
+      if (text.includes('FROM public.cartera_cuentas')) {
+        return {
+          rows: [
+            {
+              id: '101',
+              estado_gestion: 'pago_realizado',
+              activa: false
+            }
+          ]
+        }
+      }
+
+      throw new Error('No debe consultar más datos')
+    }
+  )
+
+  await assert.rejects(
+    reassignPortfolioAccount({
+      pool,
+      usuario: admin(),
+      accountId: '101',
+      executiveId: 13,
+      reason: 'Cambio controlado'
+    }),
+    error => (
+      error.code === 'CARTERA_ACCOUNT_INACTIVE'
+      && error.status === 409
+    )
+  )
+
+  assert.equal(
+    pool.calls.at(-1).text,
+    'ROLLBACK'
+  )
+})
+
 test('rechaza Ejecutivo de otra empresa o inactivo', async () => {
   const pool = transactionPool(
     async text => {

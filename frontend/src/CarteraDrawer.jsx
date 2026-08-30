@@ -466,6 +466,8 @@ export default function CarteraDrawer({
   const latestManagement = history.find(
     item => item.gestion_id
   ) || null
+  const isAccountActive = account?.activa === true
+  const hasActiveAssignment = Boolean(account?.asignacion_id)
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
@@ -570,6 +572,18 @@ export default function CarteraDrawer({
                     </div>
                   )}
 
+                  {!isAccountActive && (
+                    <div className="rounded-2xl border border-gray-300 bg-gray-50 p-4 text-gray-800">
+                      <p className="font-bold">
+                        Cuenta cerrada
+                      </p>
+                      <p className="mt-1 text-sm">
+                        El expediente permanece disponible para consulta,
+                        pero ya no admite gestiones ni reasignaciones.
+                      </p>
+                    </div>
+                  )}
+
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
                       Vista rápida
@@ -612,8 +626,12 @@ export default function CarteraDrawer({
                             {account.ejecutivo_nombre || 'Sin asignar'}
                           </p>
                         </div>
-                        <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-800 ring-1 ring-blue-200">
-                          Asignación activa
+                        <span className={`rounded-full px-3 py-1 text-sm font-bold ring-1 ${hasActiveAssignment
+                          ? 'bg-blue-50 text-blue-800 ring-blue-200'
+                          : 'bg-gray-100 text-gray-700 ring-gray-200'}`}>
+                          {hasActiveAssignment
+                            ? 'Asignación activa'
+                            : 'Sin asignación activa'}
                         </span>
                       </div>
                       <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
@@ -695,13 +713,15 @@ export default function CarteraDrawer({
                   </div>
 
                   <div className="flex flex-wrap gap-3 border-t pt-5">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('management')}
-                      className="rounded-xl bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
-                    >
-                      Ir a registrar gestión
-                    </button>
+                    {isAccountActive && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('management')}
+                        className="rounded-xl bg-orange-600 px-5 py-3 font-bold text-white hover:bg-orange-700"
+                      >
+                        Ir a registrar gestión
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setActiveTab('details')}
@@ -868,6 +888,20 @@ export default function CarteraDrawer({
                   ? 'space-y-6'
                   : 'hidden'}
               >
+                {!isAccountActive && (
+                  <section className="rounded-2xl border border-gray-300 bg-gray-50 p-5">
+                    <h3 className="text-lg font-bold">
+                      Cuenta cerrada
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-700">
+                      Esta cuenta es de solo consulta. No admite nuevas
+                      gestiones ni reasignaciones; su historial y auditoría
+                      permanecen disponibles.
+                    </p>
+                  </section>
+                )}
+
+                {isAccountActive && (
                 <section className="rounded-2xl border border-orange-200 bg-orange-50/40 p-5">
                 <h3 className="text-lg font-bold">
                   Registrar gestión
@@ -1136,8 +1170,9 @@ export default function CarteraDrawer({
                   </button>
                 </form>
               </section>
+                )}
 
-              {isAdministrator && (
+              {isAdministrator && isAccountActive && (
                 <section className="rounded-2xl border border-purple-200 bg-purple-50 p-5">
                   <h3 className="text-lg font-bold">
                     Reasignación administrativa

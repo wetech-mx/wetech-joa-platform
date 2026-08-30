@@ -43,6 +43,19 @@ test('la pantalla ya no permite cambiar estado manualmente', () => {
   assert.match(drawer, /Registrar gestión/)
 })
 
+test('una cuenta cerrada queda disponible únicamente para consulta', () => {
+  const drawer = source('CarteraDrawer.jsx')
+
+  assert.match(drawer, /account\?\.activa === true/)
+  assert.match(drawer, /Cuenta cerrada/)
+  assert.match(drawer, /ya no admite gestiones ni reasignaciones/)
+  assert.match(
+    drawer,
+    /isAdministrator && isAccountActive/
+  )
+  assert.match(drawer, /Sin asignación activa/)
+})
+
 test('el expediente organiza la operación en pestañas sin perder detalle', () => {
   const drawer = source('CarteraDrawer.jsx')
   const portfolio = source('Cartera.jsx')
