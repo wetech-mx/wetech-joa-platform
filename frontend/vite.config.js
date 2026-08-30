@@ -10,6 +10,9 @@ export default defineConfig({
 
   server: {
     host: '0.0.0.0',
-    allowedHosts: ['crm.we-tech.mx', 'crm.cobranzalegalrosasyasociados.com']
+    allowedHosts: ['crm.we-tech.mx', 'crm.cobranzalegalrosasyasociados.com'],
+    watch: {
+      ignored: ['**/var/log/nginx/**']
+    }
   }
 })
