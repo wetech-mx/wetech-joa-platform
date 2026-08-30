@@ -35,6 +35,11 @@ test('identifica el contenedor principal y el acceso', () => {
   assert.match(readSource('Login.jsx'), /crm-login/)
 })
 
+test('identifica We-Tech.mx como marca registrada', () => {
+  assert.match(readSource('App.jsx'), /We-Tech\.mx®/)
+  assert.match(readSource('Login.jsx'), /We-Tech\.mx®/)
+})
+
 test('mantiene valores y acciones operativas en peso regular', () => {
   const portfolio = readSource('Cartera.jsx')
   const dashboard = readSource('CarteraDashboard.jsx')

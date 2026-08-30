@@ -94,7 +94,7 @@ export default function Login({ onLogin }) {
               rel="noreferrer"
               className="font-normal hover:underline"
             >
-              We-Tech.mx
+              We-Tech.mx®
             </a>
           </p>
 

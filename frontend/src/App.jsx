@@ -506,7 +506,7 @@ const navigationClass = screen => (
               rel="noreferrer"
               className="block mt-1 text-orange-400 hover:underline"
             >
-              We-Tech.mx
+              We-Tech.mx®
             </a>
           </div>
 
