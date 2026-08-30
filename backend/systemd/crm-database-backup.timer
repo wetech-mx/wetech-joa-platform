@@ -1,0 +1,12 @@
+[Unit]
+Description=Programa el respaldo diario de Rosas y Asociados CRM
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 America/Mexico_City
+Persistent=true
+RandomizedDelaySec=5m
+AccuracySec=1m
+Unit=crm-database-backup.service
+
+[Install]
+WantedBy=timers.target
