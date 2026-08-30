@@ -308,6 +308,45 @@ async function deactivateUser({
   }
 }
 
+async function resetUserPassword({
+  pool,
+  usuario,
+  userId,
+  passwordHash
+}) {
+  const scope = resolveUserScope(usuario)
+  const id = positiveInteger(userId, 'El usuario')
+
+  const result = await pool.query(
+    `
+    UPDATE public.usuarios
+    SET password_hash = $1
+    WHERE
+      id = $2
+      AND empresa_id = $3
+      AND rol <> $4
+      AND activo = TRUE
+    RETURNING id, nombre, email, rol, activo
+    `,
+    [
+      passwordHash,
+      id,
+      scope.companyId,
+      ROLES.SUPER_ADMIN
+    ]
+  )
+
+  if (!result.rows[0]) {
+    throw new UserSecurityError(
+      'USER_NOT_FOUND',
+      'El usuario no existe, está inactivo, no pertenece a la empresa o está protegido',
+      404
+    )
+  }
+
+  return result.rows[0]
+}
+
 module.exports = {
   MANAGEABLE_ROLES,
   UserSecurityError,
@@ -319,6 +358,7 @@ module.exports = {
   normalizeRole,
   normalizeUserInput,
   positiveInteger,
+  resetUserPassword,
   resolveUserScope,
   updateUser
 }

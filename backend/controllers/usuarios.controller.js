@@ -8,7 +8,9 @@ const {
   createUser,
   deactivateUser,
   listUsers,
+  normalizePassword,
   normalizeUserInput,
+  resetUserPassword,
   updateUser
 } = require('../repositories/usuarios-repository')
 
@@ -89,10 +91,32 @@ async function eliminarUsuario(req, res) {
   }
 }
 
+async function restablecerPassword(req, res) {
+  try {
+    const password = normalizePassword(req.body?.password)
+    const passwordHash = await bcrypt.hash(password, 12)
+
+    const updated = await resetUserPassword({
+      pool,
+      usuario: req.usuario,
+      userId: req.params.id,
+      passwordHash
+    })
+
+    res.json({
+      success: true,
+      usuario: updated
+    })
+  } catch (error) {
+    sendUserError(res, error)
+  }
+}
+
 module.exports = {
   crearUsuario,
   editarUsuario,
   eliminarUsuario,
   obtenerUsuarios,
+  restablecerPassword,
   sendUserError
 }

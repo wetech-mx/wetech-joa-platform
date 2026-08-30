@@ -44,10 +44,10 @@ test('cada ruta de usuarios exige token empresa y administración', () => {
   assert.doesNotMatch(routes, /router\.use\(/)
 
   const protectedRoutes = routes.match(
-    /router\.(get|post|put|delete)\([\s\S]*?requiereAdmin,/g
+    /router\.(get|post|put|patch|delete)\([\s\S]*?requiereAdmin,/g
   ) || []
 
-  assert.equal(protectedRoutes.length, 4)
+  assert.equal(protectedRoutes.length, 5)
 
   for (const route of protectedRoutes) {
     assert.match(route, /verificaToken,/)

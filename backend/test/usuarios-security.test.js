@@ -8,6 +8,7 @@ const {
   deactivateUser,
   listUsers,
   normalizeUserInput,
+  resetUserPassword,
   resolveUserScope,
   updateUser
 } = require('../repositories/usuarios-repository')
@@ -156,6 +157,64 @@ test('impide desactivar la propia cuenta', async () => {
     error => (
       error.code === 'USER_SELF_DEACTIVATION_FORBIDDEN'
       && error.status === 403
+    )
+  )
+})
+
+test('restablece contraseña solo dentro de la empresa y sin exponer hash', async () => {
+  const pool = mockPool([
+    {
+      rows: [
+        {
+          id: 10,
+          nombre: 'Ejecutivo controlado',
+          email: 'ejecutivo@example.test',
+          rol: ROLES.EJECUTIVO,
+          activo: true
+        }
+      ]
+    }
+  ])
+
+  const updated = await resetUserPassword({
+    pool,
+    usuario: session(),
+    userId: 10,
+    passwordHash: 'hash-controlado'
+  })
+
+  assert.equal(updated.id, 10)
+  assert.match(pool.calls[0].text, /SET password_hash = \$1/)
+  assert.match(pool.calls[0].text, /empresa_id = \$3/)
+  assert.match(pool.calls[0].text, /rol <> \$4/)
+  assert.doesNotMatch(
+    pool.calls[0].text,
+    /RETURNING.*password_hash/s
+  )
+  assert.deepEqual(
+    pool.calls[0].values,
+    [
+      'hash-controlado',
+      10,
+      7,
+      ROLES.SUPER_ADMIN
+    ]
+  )
+})
+
+test('no restablece usuarios inactivos, ajenos o protegidos', async () => {
+  const pool = mockPool([{ rows: [] }])
+
+  await assert.rejects(
+    resetUserPassword({
+      pool,
+      usuario: session(),
+      userId: 10,
+      passwordHash: 'hash-controlado'
+    }),
+    error => (
+      error.code === 'USER_NOT_FOUND'
+      && error.status === 404
     )
   )
 })

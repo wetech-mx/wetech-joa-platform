@@ -9,6 +9,17 @@ const [modoEdicion, setModoEdicion] = useState(false)
 
 const [usuarioEditando, setUsuarioEditando] = useState(null)
 
+const [usuarioPassword, setUsuarioPassword] = useState(null)
+
+const [passwordNueva, setPasswordNueva] = useState('')
+
+const [passwordConfirmacion, setPasswordConfirmacion] = useState('')
+
+const [passwordError, setPasswordError] = useState('')
+
+const [restableciendoPassword, setRestableciendoPassword] =
+  useState(false)
+
 const [nuevoUsuario, setNuevoUsuario] = useState({
   nombre: '',
   email: '',
@@ -164,6 +175,71 @@ const editarUsuario = (usuario) => {
 
 }
 
+const abrirRestablecerPassword = (usuario) => {
+  setUsuarioPassword(usuario)
+  setPasswordNueva('')
+  setPasswordConfirmacion('')
+  setPasswordError('')
+}
+
+const cerrarRestablecerPassword = () => {
+  if (restableciendoPassword) return
+
+  setUsuarioPassword(null)
+  setPasswordNueva('')
+  setPasswordConfirmacion('')
+  setPasswordError('')
+}
+
+const restablecerPassword = async () => {
+  if (passwordNueva.length < 10 || passwordNueva.length > 128) {
+    setPasswordError(
+      'La contraseña debe tener entre 10 y 128 caracteres.'
+    )
+    return
+  }
+
+  if (passwordNueva !== passwordConfirmacion) {
+    setPasswordError('Las contraseñas no coinciden.')
+    return
+  }
+
+  setRestableciendoPassword(true)
+  setPasswordError('')
+
+  try {
+    const response = await apiFetch(
+      `/crm-api/usuarios/${usuarioPassword.id}/password`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          password: passwordNueva
+        })
+      }
+    )
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || 'No fue posible restablecer la contraseña'
+      )
+    }
+
+    alert(`Contraseña restablecida para ${usuarioPassword.nombre}`)
+    setUsuarioPassword(null)
+    setPasswordNueva('')
+    setPasswordConfirmacion('')
+  } catch (error) {
+    console.error(error)
+    setPasswordError(error.message)
+  } finally {
+    setRestableciendoPassword(false)
+  }
+}
+
 const eliminarUsuario = async (id) => {
 
   if (id === usuarioActual?.id) {
@@ -291,6 +367,17 @@ const eliminarUsuario = async (id) => {
   "
 >
   ✏️ Editar
+</button>
+
+<button
+  onClick={() => abrirRestablecerPassword(usuario)}
+  disabled={
+    !usuario.activo
+    || usuario.rol === 'super_admin'
+  }
+  className="ml-2 rounded-lg bg-blue-700 px-3 py-2 text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-40"
+>
+  🔑 Contraseña
 </button>
 
 <button
@@ -454,6 +541,85 @@ Cancelar
 
 </div>
 
+)}
+
+{usuarioPassword && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+      <h2 className="text-2xl font-bold">
+        Restablecer contraseña
+      </h2>
+
+      <p className="mt-2 text-sm text-gray-600">
+        Usuario: <strong>{usuarioPassword.nombre}</strong>
+      </p>
+
+      <p className="mt-1 text-sm text-gray-600">
+        La contraseña anterior no se mostrará ni será necesaria.
+      </p>
+
+      {passwordError && (
+        <div
+          role="alert"
+          className="mt-4 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700"
+        >
+          {passwordError}
+        </div>
+      )}
+
+      <label className="mt-5 block text-sm font-bold">
+        Nueva contraseña
+        <input
+          type="password"
+          minLength="10"
+          maxLength="128"
+          autoComplete="new-password"
+          value={passwordNueva}
+          onChange={event => setPasswordNueva(event.target.value)}
+          className="mt-1 w-full rounded-xl border p-3 font-normal"
+          placeholder="Entre 10 y 128 caracteres"
+        />
+      </label>
+
+      <label className="mt-4 block text-sm font-bold">
+        Confirmar contraseña
+        <input
+          type="password"
+          minLength="10"
+          maxLength="128"
+          autoComplete="new-password"
+          value={passwordConfirmacion}
+          onChange={event =>
+            setPasswordConfirmacion(event.target.value)
+          }
+          className="mt-1 w-full rounded-xl border p-3 font-normal"
+          placeholder="Repita la nueva contraseña"
+        />
+      </label>
+
+      <div className="mt-6 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={restablecerPassword}
+          disabled={restableciendoPassword}
+          className="rounded-xl bg-blue-700 px-5 py-3 text-white hover:bg-blue-800 disabled:bg-gray-300"
+        >
+          {restableciendoPassword
+            ? 'Restableciendo…'
+            : 'Guardar nueva contraseña'}
+        </button>
+
+        <button
+          type="button"
+          onClick={cerrarRestablecerPassword}
+          disabled={restableciendoPassword}
+          className="rounded-xl bg-gray-400 px-5 py-3 text-white hover:bg-gray-500 disabled:bg-gray-300"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
 )}
     </div>
 

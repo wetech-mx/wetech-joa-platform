@@ -6,7 +6,8 @@ const {
   obtenerUsuarios,
   crearUsuario,
   editarUsuario,
-  eliminarUsuario
+  eliminarUsuario,
+  restablecerPassword
 } = require('../controllers/usuarios.controller')
 
 const {
@@ -37,6 +38,14 @@ router.put(
   requiereEmpresa,
   requiereAdmin,
   editarUsuario
+)
+
+router.patch(
+  '/usuarios/:id/password',
+  verificaToken,
+  requiereEmpresa,
+  requiereAdmin,
+  restablecerPassword
 )
 
 router.delete(
