@@ -1,9 +1,14 @@
 const jwt = require('jsonwebtoken')
 
 const { JWT_SECRET } = require('../config/auth')
+const pool = require('../config/database')
 const { ROLES } = require('../config/constants')
+const {
+  SessionControlError,
+  validateSession
+} = require('../repositories/session-control-repository')
 
-function verificaToken(req, res, next) {
+async function verificaToken(req, res, next) {
 
   const authHeader = req.headers.authorization
 
@@ -26,14 +31,44 @@ function verificaToken(req, res, next) {
       JWT_SECRET
     )
 
-    req.usuario = decoded
+    await validateSession({
+      pool,
+      usuario: decoded,
+      sessionId: decoded.jti
+    })
 
-    next()
+    req.usuario = {
+      ...decoded,
+      session_id: decoded.jti
+    }
+
+    return next()
 
   } catch (error) {
 
-    return res.status(401).json({
-      error: 'Token inválido'
+    if (
+      error instanceof SessionControlError
+      || error?.name === 'JsonWebTokenError'
+      || error?.name === 'TokenExpiredError'
+    ) {
+      return res.status(401).json({
+        error: error instanceof SessionControlError
+          ? error.message
+          : 'Token inválido',
+        code: error instanceof SessionControlError
+          ? error.code
+          : 'TOKEN_INVALID'
+      })
+    }
+
+    console.error('SESSION_VALIDATION_ERROR', {
+      name: error?.name || 'Error',
+      code: error?.code || 'UNEXPECTED'
+    })
+
+    return res.status(503).json({
+      error: 'No fue posible validar la sesión',
+      code: 'SESSION_VALIDATION_UNAVAILABLE'
     })
 
   }

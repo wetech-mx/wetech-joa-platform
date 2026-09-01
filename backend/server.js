@@ -16,6 +16,7 @@ const {
 const app = express()
 
 app.disable('x-powered-by')
+app.set('trust proxy', 'loopback')
 app.use(cors(crearOpcionesCors(process.env.CORS_ORIGINS)))
 app.use(express.json({ limit: '1mb' }))
 

@@ -17,6 +17,7 @@ import CarteraGestiones from './CarteraGestiones'
 import CarteraReportes from './CarteraReportes'
 import CarteraTipificaciones from './CarteraTipificaciones'
 import Integraciones from './Integraciones'
+import SessionMonitor from './SessionMonitor'
 import { apiFetch } from './api'
 
 export default function App() {
@@ -333,6 +334,62 @@ useEffect(() => {
 
 }, [usuario])
 
+useEffect(() => {
+
+  if (!usuario) return undefined
+
+  let active = true
+
+  async function registrarActividad() {
+    try {
+      const response = await apiFetch(
+        '/crm-api/sesiones/heartbeat',
+        { method: 'POST' }
+      )
+
+      if (active && !response.ok) {
+        console.error(
+          'No fue posible registrar la actividad de la sesión'
+        )
+      }
+    } catch (error) {
+      if (active) {
+        console.error(
+          'Error registrando actividad de sesión:',
+          error
+        )
+      }
+    }
+  }
+
+  registrarActividad()
+
+  const intervalId = window.setInterval(
+    registrarActividad,
+    60 * 1000
+  )
+
+  return () => {
+    active = false
+    window.clearInterval(intervalId)
+  }
+
+}, [usuario])
+
+const cerrarSesion = async () => {
+  try {
+    await apiFetch('/crm-api/logout', {
+      method: 'POST'
+    })
+  } catch (error) {
+    console.error('Error cerrando la sesión:', error)
+  } finally {
+    localStorage.removeItem('token')
+    localStorage.removeItem('usuario')
+    window.location.reload()
+  }
+}
+
     const leadsFiltrados = leads
   .filter((lead) => {
 
@@ -439,6 +496,14 @@ const navigationClass = screen => (
     Usuarios
   </button>
 )}
+          {usuario?.rol !== 'Ejecutivo' && (
+            <button
+              onClick={() => setPantalla('sesiones')}
+              className={navigationClass('sesiones')}
+            >
+              Sesiones
+            </button>
+          )}
           <button
             onClick={() => setPantalla('dashboard')}
             className={navigationClass('dashboard')}
@@ -543,6 +608,10 @@ const navigationClass = screen => (
 
 {pantalla === 'usuarios' && (
   <Usuarios usuarioActual={usuario} />
+)}
+
+{pantalla === 'sesiones' && usuario?.rol !== 'Ejecutivo' && (
+  <SessionMonitor />
 )}
 
 {pantalla === 'banco-azteca' && (
@@ -670,14 +739,7 @@ const navigationClass = screen => (
   </div>
 
   <button
-    onClick={() => {
-
-      localStorage.removeItem('token')
-      localStorage.removeItem('usuario')
-
-      window.location.reload()
-
-    }}
+    onClick={cerrarSesion}
     className="bg-red-600 text-white px-4 py-2 rounded-lg"
   >
     Cerrar sesión

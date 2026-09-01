@@ -1,8 +1,18 @@
 const bcrypt = require('bcrypt')
+const crypto = require('node:crypto')
 const jwt = require('jsonwebtoken')
 
 const { JWT_SECRET } = require('../config/auth')
 const pool = require('../config/database')
+const {
+  createSession
+} = require('../repositories/session-control-repository')
+
+const SESSION_DURATION_HOURS = 12
+
+function requestIp(req) {
+  return req.ip || req.socket?.remoteAddress || null
+}
 
 async function login(req, res) {
 
@@ -51,6 +61,11 @@ async function login(req, res) {
       })
     }
 
+    const sessionId = crypto.randomUUID()
+    const expiresAt = new Date(
+      Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000
+    )
+
     const token = jwt.sign(
       {
         id: usuario.id,
@@ -59,9 +74,19 @@ async function login(req, res) {
       },
       JWT_SECRET,
       {
-        expiresIn: '12h'
+        expiresIn: `${SESSION_DURATION_HOURS}h`,
+        jwtid: sessionId
       }
     )
+
+    await createSession({
+      pool,
+      usuario,
+      sessionId,
+      expiresAt,
+      ipAddress: requestIp(req),
+      userAgent: req.get('user-agent')
+    })
 
     res.json({
       token,
@@ -86,5 +111,6 @@ async function login(req, res) {
 }
 
 module.exports = {
+  SESSION_DURATION_HOURS,
   login
 }
