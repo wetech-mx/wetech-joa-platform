@@ -546,7 +546,15 @@ export default function Cartera({
                       </p>
                     </td>
                     <td className="p-4">
-                      <p>{row.id_campania}</p>
+                      <p>
+                        {row.campania_nombre || row.id_campania}
+                      </p>
+                      {row.campania_nombre
+                        && row.campania_nombre !== row.id_campania && (
+                        <p className="text-xs text-gray-500">
+                          Código: {row.id_campania}
+                        </p>
+                      )}
                       <p className="text-xs text-gray-500">
                         Folio: {row.folio}
                       </p>

@@ -306,6 +306,65 @@ async function startImport(
   }
 }
 
+async function upsertCampaign(
+  client,
+  {
+    empresaId,
+    origenId,
+    code,
+    date
+  }
+) {
+  await client.query(
+    `
+    INSERT INTO public.cartera_campanias
+    (
+      empresa_id,
+      origen_id,
+      codigo,
+      nombre,
+      primera_fecha_cartera,
+      ultima_fecha_cartera
+    )
+    VALUES
+    (
+      $1,
+      $2,
+      $3,
+      CASE
+        WHEN UPPER(BTRIM($3)) = 'SIN CAMPAÑA'
+          THEN 'Sin campaña'
+        ELSE $3
+      END,
+      $4,
+      $4
+    )
+    ON CONFLICT
+    (
+      empresa_id,
+      origen_id,
+      codigo
+    )
+    DO UPDATE SET
+      primera_fecha_cartera = LEAST(
+        cartera_campanias.primera_fecha_cartera,
+        EXCLUDED.primera_fecha_cartera
+      ),
+      ultima_fecha_cartera = GREATEST(
+        cartera_campanias.ultima_fecha_cartera,
+        EXCLUDED.ultima_fecha_cartera
+      ),
+      actualizada_at = NOW()
+    `,
+    [
+      empresaId,
+      origenId,
+      code,
+      date
+    ]
+  )
+}
+
 async function upsertAccount(
   client,
   {
@@ -386,7 +445,11 @@ async function upsertAccount(
         ultima_fecha_cartera,
         $6
       ),
-      activa = TRUE,
+      en_corte_actual = CASE
+        WHEN $6 >= ultima_fecha_cartera
+          THEN TRUE
+        ELSE en_corte_actual
+      END,
       actualizada_at = NOW()
     WHERE
       empresa_id = $1
@@ -418,6 +481,48 @@ async function upsertAccount(
     id: updated.rows[0].id,
     isNew: false
   }
+}
+
+async function reconcileCurrentCut(
+  client,
+  {
+    empresaId,
+    origenId,
+    importacionId,
+    date
+  }
+) {
+  const result = await client.query(
+    `
+    UPDATE public.cartera_cuentas c
+    SET
+      en_corte_actual = FALSE,
+      actualizada_at = NOW()
+    WHERE
+      c.empresa_id = $1
+      AND c.origen_id = $2
+      AND c.en_corte_actual = TRUE
+      AND c.ultima_fecha_cartera <= $4
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.cartera_snapshots s
+        WHERE
+          s.cuenta_id = c.id
+          AND s.importacion_id = $3
+      )
+    RETURNING c.id
+    `,
+    [
+      empresaId,
+      origenId,
+      importacionId,
+      date
+    ]
+  )
+
+  return Array.isArray(result.rows)
+    ? result.rows.length
+    : 0
 }
 
 async function insertSnapshot(
@@ -503,7 +608,8 @@ async function completeImport(
     campaigns,
     totalRows,
     newRecords,
-    updatedRecords
+    updatedRecords,
+    outsideCurrentCut
   }
 ) {
   const result = await client.query(
@@ -515,6 +621,7 @@ async function completeImport(
       registros_leidos = $3,
       registros_nuevos = $4,
       registros_actualizados = $5,
+      registros_fuera_corte = $6,
       registros_duplicados = 0,
       registros_omitidos = 0,
       finalizada_at = NOW()
@@ -526,7 +633,8 @@ async function completeImport(
       campaigns,
       totalRows,
       newRecords,
-      updatedRecords
+      updatedRecords,
+      outsideCurrentCut
     ]
   )
 
@@ -691,7 +799,18 @@ async function persistPortfolio({
     const campaigns = new Set()
 
     for (const record of portfolio.records) {
-      campaigns.add(record.identity.idCampania)
+      if (!campaigns.has(record.identity.idCampania)) {
+        await upsertCampaign(
+          client,
+          {
+            empresaId,
+            origenId,
+            code: record.identity.idCampania,
+            date: portfolio.date
+          }
+        )
+        campaigns.add(record.identity.idCampania)
+      }
 
       const account = await upsertAccount(
         client,
@@ -750,6 +869,16 @@ async function persistPortfolio({
       }
     }
 
+    const outsideCurrentCut = await reconcileCurrentCut(
+      client,
+      {
+        empresaId,
+        origenId,
+        importacionId: importation.id,
+        date: portfolio.date
+      }
+    )
+
     await completeImport(
       client,
       {
@@ -757,7 +886,8 @@ async function persistPortfolio({
         campaigns: campaigns.size,
         totalRows: portfolio.records.length,
         newRecords,
-        updatedRecords
+        updatedRecords,
+        outsideCurrentCut
       }
     )
 
@@ -812,8 +942,10 @@ module.exports = {
   isPositiveDatabaseId,
   insertSnapshot,
   persistPortfolio,
+  reconcileCurrentCut,
   recordFailedImport,
   startImport,
+  upsertCampaign,
   upsertAccount,
   validatePersistenceInput
 }

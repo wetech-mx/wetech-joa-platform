@@ -35,7 +35,8 @@ function buildPortfolioAlertStatement({
   ]
   const accountConditions = [
     'c.empresa_id = $1',
-    'c.activa = TRUE'
+    'c.activa = TRUE',
+    'c.en_corte_actual = TRUE'
   ]
   const historicalAccountConditions = [
     'history_account.empresa_id = $1'
@@ -164,6 +165,9 @@ function buildPortfolioAlertStatement({
       historical_activity AS (
         SELECT
           g.usuario_id,
+          g.cuenta_id,
+          g.promesa_fecha,
+          g.estado_resultante,
           g.creada_at
         FROM public.cartera_gestiones g
         INNER JOIN public.cartera_cuentas history_account
@@ -184,6 +188,47 @@ function buildPortfolioAlertStatement({
               = (CURRENT_TIMESTAMP AT TIME ZONE
                 'America/Mexico_City')::DATE
           ) AS managed_today,
+          COUNT(h.creada_at) FILTER (
+            WHERE
+              (h.creada_at AT TIME ZONE
+                'America/Mexico_City')::DATE
+              = (CURRENT_TIMESTAMP AT TIME ZONE
+                'America/Mexico_City')::DATE - 1
+          ) AS managed_yesterday,
+          COUNT(DISTINCT h.cuenta_id) FILTER (
+            WHERE
+              (h.creada_at AT TIME ZONE
+                'America/Mexico_City')::DATE
+              = (CURRENT_TIMESTAMP AT TIME ZONE
+                'America/Mexico_City')::DATE - 1
+          ) AS accounts_managed_yesterday,
+          COUNT(h.creada_at) FILTER (
+            WHERE
+              (h.creada_at AT TIME ZONE
+                'America/Mexico_City')::DATE
+              = (CURRENT_TIMESTAMP AT TIME ZONE
+                'America/Mexico_City')::DATE - 1
+              AND h.promesa_fecha IS NOT NULL
+          ) AS promises_created_yesterday,
+          COUNT(h.creada_at) FILTER (
+            WHERE
+              (h.creada_at AT TIME ZONE
+                'America/Mexico_City')::DATE
+              = (CURRENT_TIMESTAMP AT TIME ZONE
+                'America/Mexico_City')::DATE - 1
+              AND h.estado_resultante = 'pago_reportado'
+          ) AS payments_reported_yesterday,
+          COUNT(h.creada_at) FILTER (
+            WHERE
+              (h.creada_at AT TIME ZONE
+                'America/Mexico_City')::DATE
+              = (CURRENT_TIMESTAMP AT TIME ZONE
+                'America/Mexico_City')::DATE - 1
+              AND h.estado_resultante IN (
+                'pago_realizado',
+                'cerrado'
+              )
+          ) AS accounts_closed_yesterday,
           MAX(h.creada_at) AS last_activity_at
         FROM eligible_executives e
         LEFT JOIN historical_activity h
@@ -253,6 +298,15 @@ function normalizeExecutiveAlertRow(row = {}) {
     assigned: countValue(row.asignadas),
     unmanaged: countValue(row.sin_gestionar),
     managedToday: countValue(row.gestiones_hoy),
+    managedYesterday: countValue(row.gestiones_ayer),
+    accountsManagedYesterday:
+      countValue(row.cuentas_gestionadas_ayer),
+    promisesCreatedYesterday:
+      countValue(row.promesas_registradas_ayer),
+    paymentsReportedYesterday:
+      countValue(row.pagos_reportados_ayer),
+    accountsClosedYesterday:
+      countValue(row.cuentas_cerradas_ayer),
     newAssignments: countValue(row.nuevas_asignaciones),
     promisesOverdue: countValue(row.promesas_vencidas),
     promisesToday: countValue(row.promesas_hoy),
@@ -270,6 +324,21 @@ function totalAlerts(executives) {
       unmanaged: totals.unmanaged + item.unmanaged,
       managedToday:
         totals.managedToday + item.managedToday,
+      managedYesterday:
+        totals.managedYesterday
+        + countValue(item.managedYesterday),
+      accountsManagedYesterday:
+        totals.accountsManagedYesterday
+        + countValue(item.accountsManagedYesterday),
+      promisesCreatedYesterday:
+        totals.promisesCreatedYesterday
+        + countValue(item.promisesCreatedYesterday),
+      paymentsReportedYesterday:
+        totals.paymentsReportedYesterday
+        + countValue(item.paymentsReportedYesterday),
+      accountsClosedYesterday:
+        totals.accountsClosedYesterday
+        + countValue(item.accountsClosedYesterday),
       newAssignments:
         totals.newAssignments + item.newAssignments,
       promisesOverdue:
@@ -287,6 +356,11 @@ function totalAlerts(executives) {
       assigned: 0,
       unmanaged: 0,
       managedToday: 0,
+      managedYesterday: 0,
+      accountsManagedYesterday: 0,
+      promisesCreatedYesterday: 0,
+      paymentsReportedYesterday: 0,
+      accountsClosedYesterday: 0,
       newAssignments: 0,
       promisesOverdue: 0,
       promisesToday: 0,
@@ -353,6 +427,27 @@ async function getPortfolioAlerts({
       COALESCE(s.assigned, 0) AS asignadas,
       COALESCE(s.unmanaged, 0) AS sin_gestionar,
       COALESCE(a.managed_today, 0) AS gestiones_hoy,
+      COALESCE(a.managed_yesterday, 0) AS gestiones_ayer,
+      COALESCE(
+        a.accounts_managed_yesterday,
+        0
+      ) AS cuentas_gestionadas_ayer,
+      COALESCE(
+        a.promises_created_yesterday,
+        0
+      ) AS promesas_registradas_ayer,
+      COALESCE(
+        a.payments_reported_yesterday,
+        0
+      ) AS pagos_reportados_ayer,
+      COALESCE(
+        a.accounts_closed_yesterday,
+        0
+      ) AS cuentas_cerradas_ayer,
+      (
+        CURRENT_TIMESTAMP AT TIME ZONE
+          'America/Mexico_City'
+      )::DATE - 1 AS fecha_dia_anterior,
       COALESCE(s.new_assignments, 0) AS nuevas_asignaciones,
       COALESCE(s.promises_overdue, 0) AS promesas_vencidas,
       COALESCE(s.promises_today, 0) AS promesas_hoy,
@@ -491,6 +586,10 @@ async function getPortfolioAlerts({
   const executives = summaryResult.rows.map(
     normalizeExecutiveAlertRow
   )
+  const previousDayDate = (
+    summaryResult.rows[0]?.fecha_dia_anterior
+    || null
+  )
 
   return {
     scope: scope.isExecutive
@@ -498,6 +597,7 @@ async function getPortfolioAlerts({
       : 'empresa',
     origin,
     generatedAt: new Date().toISOString(),
+    previousDayDate,
     totals: totalAlerts(executives),
     executives,
     items: itemsResult.rows.map(normalizeAlertItem)

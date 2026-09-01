@@ -18,6 +18,22 @@ const {
 } = require('../repositories/cartera-read-repository')
 
 const {
+  listPortfolioCampaigns,
+  updatePortfolioCampaign
+} = require(
+  '../repositories/cartera-campaign-repository'
+)
+
+const {
+  getDailyCutReport,
+  listDailyCuts
+} = require('../repositories/cartera-report-repository')
+
+const {
+  exportDailyCutReport
+} = require('../services/cartera-report-service')
+
+const {
   getPortfolioAlerts
 } = require('../repositories/cartera-alerts-repository')
 
@@ -266,6 +282,106 @@ async function obtenerGestionesCartera(
   }
 }
 
+async function obtenerCampaniasCartera(
+  req,
+  res
+) {
+  try {
+    const result = await listPortfolioCampaigns({
+      pool,
+      usuario: req.usuario,
+      query: req.query
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function actualizarCampaniaCartera(
+  req,
+  res
+) {
+  try {
+    const result = await updatePortfolioCampaign({
+      pool,
+      usuario: req.usuario,
+      campaignId: req.params.id,
+      input: req.body
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function obtenerCortesCartera(
+  req,
+  res
+) {
+  try {
+    const result = await listDailyCuts({
+      pool,
+      usuario: req.usuario,
+      query: req.query
+    })
+
+    return res.json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function obtenerReporteCorteCartera(
+  req,
+  res
+) {
+  try {
+    const result = await getDailyCutReport({
+      pool,
+      usuario: req.usuario,
+      query: req.query
+    })
+    const {
+      details,
+      ...summary
+    } = result
+
+    return res.json(summary)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function descargarReporteCorteCartera(
+  req,
+  res
+) {
+  try {
+    const result = await exportDailyCutReport({
+      pool,
+      usuario: req.usuario,
+      query: req.query
+    })
+
+    res.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.'
+        + 'spreadsheetml.sheet',
+      'Content-Disposition':
+        `attachment; filename="${result.fileName}"`,
+      'Cache-Control': 'no-store, private',
+      'X-Content-Type-Options': 'nosniff'
+    })
+
+    return res.status(200).send(result.buffer)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
 async function obtenerTipificacionesCartera(
   req,
   res
@@ -427,19 +543,24 @@ async function reasignarCuentaCartera(
 }
 
 module.exports = {
+  actualizarCampaniaCartera,
   actualizarEstadoCartera,
   actualizarTipificacionCartera,
   agregarNotaCartera,
   confirmarImportacionCartera,
   crearTipificacionCartera,
+  descargarReporteCorteCartera,
   obtenerAlertasCartera,
+  obtenerCampaniasCartera,
   obtenerCartera,
+  obtenerCortesCartera,
   obtenerCuentaCartera,
   obtenerEjecutivosCartera,
   obtenerEstadoImportacionCartera,
   obtenerGestionesCartera,
   obtenerOrigenesCartera,
   obtenerResumenCartera,
+  obtenerReporteCorteCartera,
   obtenerTipificacionesCartera,
   obtenerTipificacionesAdministracion,
   previsualizarImportacionCartera,

@@ -61,6 +61,7 @@ test('el alcance Ejecutivo queda parametrizado por la sesión', () => {
   )
   assert.match(statement.ctes, /u\.id = \$3/)
   assert.match(statement.ctes, /c\.empresa_id = \$1/)
+  assert.match(statement.ctes, /c\.en_corte_actual = TRUE/)
   assert.match(statement.ctes, /a\.activa = TRUE/)
   assert.match(statement.ctes, /latest_promise_event/)
   assert.match(statement.ctes, /p\.promesa_estado = 'pendiente'/)
@@ -120,6 +121,14 @@ test('la última actividad conserva gestiones de cuentas cerradas', () => {
     statement.ctes,
     /MAX\(h\.creada_at\) AS last_activity_at/
   )
+  assert.match(
+    statement.ctes,
+    /managed_yesterday/
+  )
+  assert.match(
+    statement.ctes,
+    /accounts_managed_yesterday/
+  )
   assert.doesNotMatch(
     activityBlock,
     /FROM assigned_accounts b|GROUP BY b\.usuario_id/
@@ -136,6 +145,11 @@ test('un Ejecutivo recibe únicamente su resumen y pendientes', async () => {
           asignadas: '20',
           sin_gestionar: '10',
           gestiones_hoy: '3',
+          gestiones_ayer: '8',
+          cuentas_gestionadas_ayer: '6',
+          promesas_registradas_ayer: '2',
+          pagos_reportados_ayer: '1',
+          cuentas_cerradas_ayer: '1',
           nuevas_asignaciones: '2',
           promesas_vencidas: '1',
           promesas_hoy: '1',
@@ -183,6 +197,8 @@ test('un Ejecutivo recibe únicamente su resumen y pendientes', async () => {
   assert.equal(result.executives[0].id, '12')
   assert.equal(result.totals.assigned, 20)
   assert.equal(result.totals.promisesOverdue, 1)
+  assert.equal(result.totals.managedYesterday, 8)
+  assert.equal(result.totals.accountsManagedYesterday, 6)
   assert.equal(result.items.length, 1)
   assert.equal(result.items[0].accountId, '100')
   assert.equal(result.items[0].amount, '500.00')
@@ -278,6 +294,11 @@ test('suma el resumen sin aceptar contadores inválidos', () => {
     assigned: 10,
     unmanaged: 8,
     managedToday: 6,
+    managedYesterday: 0,
+    accountsManagedYesterday: 0,
+    promisesCreatedYesterday: 0,
+    paymentsReportedYesterday: 0,
+    accountsClosedYesterday: 0,
     newAssignments: 4,
     promisesOverdue: 3,
     promisesToday: 3,
@@ -313,12 +334,14 @@ test('el Dashboard muestra resumen por rol y abre la cuenta', () => {
 
   assert.match(
     dashboard,
-    /\/crm-api\/cartera\/alertas/
+    /fetchPortfolioAlerts/
   )
   assert.match(dashboard, /Mi resumen de pendientes/)
   assert.match(dashboard, /Supervisión por ejecutivo/)
   assert.match(dashboard, /Promesas vencidas/)
   assert.match(dashboard, /Seguimientos vencidos/)
+  assert.match(dashboard, /Resultado del día anterior/)
+  assert.match(dashboard, /Gestiones realizadas/)
   assert.match(
     dashboard,
     /onOpenAccount\(item\.accountId\)/
@@ -326,4 +349,35 @@ test('el Dashboard muestra resumen por rol y abre la cuenta', () => {
   assert.match(app, /openPortfolioAccount/)
   assert.match(app, /initialAccountId=\{carteraAccountId\}/)
   assert.match(portfolio, /initialAccountId \|\| null/)
+})
+
+test('el resumen diario aparece una vez y Alertas queda disponible', () => {
+  const brief = source(
+    'frontend/src/CarteraDailyBrief.jsx'
+  )
+  const client = source(
+    'frontend/src/cartera-alerts-api.js'
+  )
+  const app = source('frontend/src/App.jsx')
+
+  assert.match(
+    brief,
+    /crm:resumen-operativo:/
+  )
+  assert.match(
+    brief,
+    /localStorage\.getItem\(storageKey\) === 'visto'/
+  )
+  assert.match(
+    brief,
+    /localStorage\.setItem\(storageKey, 'visto'\)/
+  )
+  assert.match(brief, /Resultado del día anterior/)
+  assert.match(brief, /Pendientes para hoy/)
+  assert.match(brief, /Ver pendientes/)
+  assert.match(client, /CACHE_TTL_MS = 30000/)
+  assert.match(client, /\/crm-api\/cartera\/alertas/)
+  assert.match(app, /setPantalla\('alertas-cartera'\)/)
+  assert.match(app, />\s*Alertas\s*</)
+  assert.match(app, /<CarteraDailyBrief/)
 })

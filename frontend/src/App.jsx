@@ -9,8 +9,12 @@ import LeadsKanban from './LeadsKanban'
 import Login from './Login'
 import BancoAzteca from './BancoAzteca'
 import Cartera from './Cartera'
+import CarteraAlerts from './CarteraAlerts'
 import CarteraDashboard from './CarteraDashboard'
+import CarteraDailyBrief from './CarteraDailyBrief'
+import CarteraCampanias from './CarteraCampanias'
 import CarteraGestiones from './CarteraGestiones'
+import CarteraReportes from './CarteraReportes'
 import CarteraTipificaciones from './CarteraTipificaciones'
 import Integraciones from './Integraciones'
 import { apiFetch } from './api'
@@ -443,6 +447,13 @@ const navigationClass = screen => (
           </button>
 
           <button
+            onClick={() => setPantalla('alertas-cartera')}
+            className={navigationClass('alertas-cartera')}
+          >
+            Alertas
+          </button>
+
+          <button
             onClick={() => setPantalla('leads')}
                     className={navigationClass('leads')}
              >
@@ -464,6 +475,22 @@ const navigationClass = screen => (
               Gestiones
             </button>
           )}
+
+          {usuario?.rol !== 'Ejecutivo' && (
+            <button
+              onClick={() => setPantalla('campanias')}
+              className={navigationClass('campanias')}
+            >
+              Campañas
+            </button>
+          )}
+
+          <button
+            onClick={() => setPantalla('reportes')}
+            className={navigationClass('reportes')}
+          >
+            Reportes
+          </button>
 
           {usuario?.rol !== 'Ejecutivo' && (
             <button
@@ -538,6 +565,31 @@ const navigationClass = screen => (
 
 {pantalla === 'gestiones' && usuario?.rol !== 'Ejecutivo' && (
   <CarteraGestiones usuario={usuario} />
+)}
+
+{pantalla === 'campanias' && usuario?.rol !== 'Ejecutivo' && (
+  <CarteraCampanias />
+)}
+
+{pantalla === 'reportes' && (
+  <CarteraReportes usuario={usuario} />
+)}
+
+{pantalla === 'alertas-cartera' && (
+  <>
+    <div className="mb-6">
+      <p className="text-sm font-bold text-orange-600">
+        CARTERA
+      </p>
+      <h1 className="mt-1 text-4xl font-bold">
+        Alertas y pendientes
+      </h1>
+      <p className="mt-2 text-gray-500">
+        Consulta nuevamente el resumen operativo del día.
+      </p>
+    </div>
+    <CarteraAlerts onOpenAccount={openPortfolioAccount} />
+  </>
 )}
 
 {pantalla === 'tipificaciones' && usuario?.rol !== 'Ejecutivo' && (
@@ -946,7 +998,12 @@ const navigationClass = screen => (
   lead={leadSeleccionado}
   onClose={() => setLeadSeleccionado(null)}
 />
-     </main>
+      </main>
+
+      <CarteraDailyBrief
+        usuario={usuario}
+        onReview={() => setPantalla('alertas-cartera')}
+      />
 
     </div>
   )

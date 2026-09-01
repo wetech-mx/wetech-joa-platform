@@ -442,6 +442,10 @@ function buildListStatement({
       'c.activa = ?',
       filters.active
     )
+
+    if (filters.active === true) {
+      conditions.push('c.en_corte_actual = TRUE')
+    }
   }
 
   if (filters.campaign) {
@@ -515,6 +519,10 @@ function buildListStatement({
     INNER JOIN public.crm_origenes o
       ON o.id = c.origen_id
       AND o.empresa_id = c.empresa_id
+    LEFT JOIN public.cartera_campanias cp
+      ON cp.empresa_id = c.empresa_id
+      AND cp.origen_id = c.origen_id
+      AND cp.codigo = c.id_campania
   `
 
   const where = `
@@ -585,10 +593,12 @@ async function listPortfolio({
       o.codigo AS origen_codigo,
       o.nombre AS origen_nombre,
       c.id_campania,
+      cp.nombre AS campania_nombre,
       c.id_cliente,
       c.folio,
       c.estado_gestion,
       c.activa,
+      c.en_corte_actual,
       c.primera_fecha_cartera,
       c.ultima_fecha_cartera,
       s.nombre,
@@ -917,7 +927,8 @@ function buildSummaryStatement(
   const values = [scope.empresaId]
   const conditions = [
     'c.empresa_id = $1',
-    'c.activa = TRUE'
+    'c.activa = TRUE',
+    'c.en_corte_actual = TRUE'
   ]
 
   if (scope.isExecutive) {
@@ -1161,10 +1172,12 @@ async function getPortfolioAccount({
       o.codigo AS origen_codigo,
       o.nombre AS origen_nombre,
       c.id_campania,
+      cp.nombre AS campania_nombre,
       c.id_cliente,
       c.folio,
       c.estado_gestion,
       c.activa,
+      c.en_corte_actual,
       c.primera_fecha_cartera,
       c.ultima_fecha_cartera,
       c.creada_at,
@@ -1237,6 +1250,10 @@ async function getPortfolioAccount({
     INNER JOIN public.crm_origenes o
       ON o.id = c.origen_id
       AND o.empresa_id = c.empresa_id
+    LEFT JOIN public.cartera_campanias cp
+      ON cp.empresa_id = c.empresa_id
+      AND cp.origen_id = c.origen_id
+      AND cp.codigo = c.id_campania
     WHERE
       c.id = $1
       AND c.empresa_id = $2

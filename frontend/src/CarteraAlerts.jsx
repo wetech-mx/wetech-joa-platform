@@ -3,7 +3,7 @@ import {
   useState
 } from 'react'
 
-import { apiFetch } from './api'
+import { fetchPortfolioAlerts } from './cartera-alerts-api'
 import {
   formatDate,
   formatMoney
@@ -13,6 +13,11 @@ const EMPTY_TOTALS = {
   assigned: 0,
   unmanaged: 0,
   managedToday: 0,
+  managedYesterday: 0,
+  accountsManagedYesterday: 0,
+  promisesCreatedYesterday: 0,
+  paymentsReportedYesterday: 0,
+  accountsClosedYesterday: 0,
   newAssignments: 0,
   promisesOverdue: 0,
   promisesToday: 0,
@@ -107,52 +112,33 @@ export default function CarteraAlerts({
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const controller = new AbortController()
-    const params = new URLSearchParams()
+    let active = true
 
-    if (originId) {
-      params.set('origen', originId)
-    }
-
-    const query = params.toString()
-    const endpoint = query
-      ? `/crm-api/cartera/alertas?${query}`
-      : '/crm-api/cartera/alertas'
-
-    apiFetch(endpoint, {
-      signal: controller.signal
+    fetchPortfolioAlerts({
+      originId,
+      force: refreshVersion > 0
     })
-      .then(async response => {
-        const data = await response
-          .json()
-          .catch(() => ({}))
-
-        if (!response.ok) {
-          throw new Error(
-            data.error
-            || 'No fue posible consultar los pendientes'
-          )
-        }
-
-        return data
-      })
       .then(data => {
-        setAlerts(data)
-        setError('')
+        if (active) {
+          setAlerts(data)
+          setError('')
+        }
       })
       .catch(requestError => {
-        if (requestError.name !== 'AbortError') {
+        if (active) {
           setAlerts(null)
           setError(requestError.message)
         }
       })
       .finally(() => {
-        if (!controller.signal.aborted) {
+        if (active) {
           setLoading(false)
         }
       })
 
-    return () => controller.abort()
+    return () => {
+      active = false
+    }
   }, [
     originId,
     refreshVersion
@@ -166,6 +152,7 @@ export default function CarteraAlerts({
     ? alerts.items
     : []
   const isExecutive = alerts?.scope === 'ejecutivo'
+  const previousDayDate = alerts?.previousDayDate || null
   const overdue = (
     Number(totals.promisesOverdue || 0)
     + Number(totals.followupsOverdue || 0)
@@ -224,6 +211,50 @@ export default function CarteraAlerts({
 
       {!loading && !error && (
         <>
+          <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                Resultado del día anterior
+              </p>
+              <p className="mt-1 text-sm text-blue-900">
+                {previousDayDate
+                  ? formatDate(previousDayDate)
+                  : 'Ayer'}
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <PendingMetric
+                label="Gestiones realizadas"
+                value={totals.managedYesterday}
+                tone="green"
+              />
+              <PendingMetric
+                label="Cuentas atendidas"
+                value={totals.accountsManagedYesterday}
+                tone="blue"
+              />
+              <PendingMetric
+                label="Promesas registradas"
+                value={totals.promisesCreatedYesterday}
+                tone="orange"
+              />
+              <PendingMetric
+                label="Pagos reportados"
+                value={totals.paymentsReportedYesterday}
+                tone="purple"
+              />
+              <PendingMetric
+                label="Cuentas cerradas"
+                value={totals.accountsClosedYesterday}
+                tone="gray"
+              />
+            </div>
+          </div>
+
+          <h4 className="mt-6 text-lg font-bold">
+            Pendientes actuales
+          </h4>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
             <PendingMetric
               label="Sin gestionar"
@@ -269,12 +300,14 @@ export default function CarteraAlerts({
 
           {!isExecutive && (
             <div className="mt-6 overflow-x-auto rounded-2xl border">
-              <table className="min-w-[1280px] w-full text-sm">
+              <table className="min-w-[1500px] w-full text-sm">
                 <thead className="bg-gray-50 text-left">
                   <tr>
                     <th className="p-3">Ejecutivo</th>
                     <th className="p-3 text-right">Asignadas</th>
                     <th className="p-3 text-right">Sin gestionar</th>
+                    <th className="p-3 text-right">Gestiones ayer</th>
+                    <th className="p-3 text-right">Cuentas ayer</th>
                     <th className="p-3 text-right">Gestiones hoy</th>
                     <th className="p-3 text-right">Promesas vencidas</th>
                     <th className="p-3 text-right">Seguimientos vencidos</th>
@@ -314,6 +347,12 @@ export default function CarteraAlerts({
                       </td>
                       <td className="p-3 text-right">
                         {formatNumber(item.unmanaged)}
+                      </td>
+                      <td className="p-3 text-right text-blue-700">
+                        {formatNumber(item.managedYesterday)}
+                      </td>
+                      <td className="p-3 text-right text-blue-700">
+                        {formatNumber(item.accountsManagedYesterday)}
                       </td>
                       <td className="p-3 text-right text-green-700">
                         {formatNumber(item.managedToday)}
