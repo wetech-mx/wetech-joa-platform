@@ -6,6 +6,7 @@ const path = require('node:path')
 const {
   getDailyCutReport,
   normalizeReportDate,
+  resolveReportDate,
   summarizeCut
 } = require('../repositories/cartera-report-repository')
 
@@ -204,6 +205,34 @@ test('rechaza una fecha imposible en reportes', () => {
     () => normalizeReportDate('2026-02-29'),
     error => error.code === 'CARTERA_REPORT_DATE_INVALID'
   )
+})
+
+test('normaliza el último corte entregado como Date por PostgreSQL', async () => {
+  const date = await resolveReportDate({
+    pool: {
+      async query() {
+        return {
+          rows: [
+            {
+              fecha: new Date('2026-08-27T00:00:00.000Z')
+            }
+          ]
+        }
+      }
+    },
+    scope: {
+      empresaId: 7,
+      isExecutive: false,
+      userId: null
+    },
+    filters: {
+      date: null,
+      originId: null,
+      executiveId: null
+    }
+  })
+
+  assert.equal(date, '2026-08-27')
 })
 
 test('el Excel neutraliza fórmulas y contiene dos hojas', () => {
