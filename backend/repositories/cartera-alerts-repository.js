@@ -41,11 +41,13 @@ function buildPortfolioAlertStatement({
   const historicalAccountConditions = [
     'history_account.empresa_id = $1'
   ]
+  let scopedExecutivePlaceholder = null
 
   if (scope.isExecutive) {
     values.push(scope.userId)
+    scopedExecutivePlaceholder = `$${values.length}`
     executiveConditions.push(
-      `u.id = $${values.length}`
+      `u.id = ${scopedExecutivePlaceholder}`
     )
   }
 
@@ -59,6 +61,27 @@ function buildPortfolioAlertStatement({
     )
   }
 
+  const sharedExecutive = scope.isExecutive
+    ? ''
+    : `
+        UNION ALL
+        SELECT
+          0 AS id,
+          'Cartera compartida' AS nombre
+        WHERE EXISTS (
+          SELECT 1
+          FROM public.cartera_campanias shared_campaign
+          WHERE
+            shared_campaign.empresa_id = $1
+            AND shared_campaign.activa = TRUE
+            AND shared_campaign.modo_distribucion = 'abierta'
+        )
+      `
+
+  const sharedExecutiveId = scope.isExecutive
+    ? scopedExecutivePlaceholder
+    : '0'
+
   return {
     values,
     ctes: `
@@ -68,6 +91,7 @@ function buildPortfolioAlertStatement({
           u.nombre
         FROM public.usuarios u
         WHERE ${executiveConditions.join('\n          AND ')}
+        ${sharedExecutive}
       ),
       assigned_accounts AS (
         SELECT
@@ -77,16 +101,35 @@ function buildPortfolioAlertStatement({
           c.id_campania,
           c.id_cliente,
           c.folio,
-          a.usuario_id,
-          a.asignada_at,
+          e.id AS usuario_id,
+          CASE
+            WHEN cp.modo_distribucion = 'abierta'
+              THEN c.actualizada_at
+            ELSE a.asignada_at
+          END AS asignada_at,
           s.nombre AS client_name,
           s.telefono_1 AS phone
         FROM public.cartera_cuentas c
-        INNER JOIN public.cartera_asignaciones a
+        LEFT JOIN public.cartera_asignaciones a
           ON a.cuenta_id = c.id
           AND a.activa = TRUE
+        LEFT JOIN public.cartera_campanias cp
+          ON cp.empresa_id = c.empresa_id
+          AND cp.origen_id = c.origen_id
+          AND cp.codigo = c.id_campania
+          AND cp.activa = TRUE
         INNER JOIN eligible_executives e
-          ON e.id = a.usuario_id
+          ON (
+            (
+              cp.modo_distribucion = 'abierta'
+              AND e.id = ${sharedExecutiveId}
+            )
+            OR (
+              COALESCE(cp.modo_distribucion, 'round_robin')
+                <> 'abierta'
+              AND e.id = a.usuario_id
+            )
+          )
         LEFT JOIN public.cartera_snapshots s
           ON s.cuenta_id = c.id
           AND s.importacion_id = c.ultima_importacion_id

@@ -13,6 +13,7 @@ import CarteraAlerts from './CarteraAlerts'
 import CarteraDashboard from './CarteraDashboard'
 import CarteraDailyBrief from './CarteraDailyBrief'
 import CarteraCampanias from './CarteraCampanias'
+import CarteraCases from './CarteraCases'
 import CarteraGestiones from './CarteraGestiones'
 import CarteraReportes from './CarteraReportes'
 import CarteraTipificaciones from './CarteraTipificaciones'
@@ -532,6 +533,13 @@ const navigationClass = screen => (
             Cartera
           </button>
 
+          <button
+            onClick={() => setPantalla('casos')}
+            className={navigationClass('casos')}
+          >
+            Casos
+          </button>
+
           {usuario?.rol !== 'Ejecutivo' && (
             <button
               onClick={() => setPantalla('gestiones')}
@@ -630,6 +638,10 @@ const navigationClass = screen => (
       setCarteraAccountId(null)
     }}
   />
+)}
+
+{pantalla === 'casos' && (
+  <CarteraCases usuario={usuario} />
 )}
 
 {pantalla === 'gestiones' && usuario?.rol !== 'Ejecutivo' && (

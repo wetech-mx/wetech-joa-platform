@@ -574,7 +574,13 @@ export default function Cartera({
                       {formatMoney(row.saldo)}
                     </td>
                     <td className="p-4">
-                      {row.ejecutivo_nombre || 'Sin asignar'}
+                      {row.modo_distribucion === 'abierta'
+                        ? (
+                          <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-bold text-green-700 ring-1 ring-green-200">
+                            Abierta para todos
+                          </span>
+                        )
+                        : row.ejecutivo_nombre || 'Sin asignar'}
                     </td>
                     <td className="p-4">
                       <StateBadge

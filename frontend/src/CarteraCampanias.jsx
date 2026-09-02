@@ -7,6 +7,24 @@ import {
 import { apiFetch } from './api'
 import { formatDate } from './cartera.constants'
 
+const DISTRIBUTION_MODES = [
+  {
+    value: 'round_robin',
+    label: 'Round robin',
+    description: 'Reparte automáticamente entre Ejecutivos.'
+  },
+  {
+    value: 'manual',
+    label: 'Asignación manual',
+    description: 'Administración decide el responsable.'
+  },
+  {
+    value: 'abierta',
+    label: 'Abierta para todos',
+    description: 'Todos pueden buscar y gestionar la cuenta.'
+  }
+]
+
 async function readJson(response, fallback) {
   const data = await response.json().catch(() => ({}))
 
@@ -49,7 +67,9 @@ export default function CarteraCampanias() {
           String(item.id),
           {
             nombre: item.nombre,
-            activa: item.activa
+            activa: item.activa,
+            modo_distribucion:
+              item.modo_distribucion || 'round_robin'
           }
         ])
       ))
@@ -129,8 +149,8 @@ export default function CarteraCampanias() {
         Campañas
       </h1>
       <p className="mt-2 text-gray-500">
-        Los códigos se detectan al importar. Aquí puede asignarles un
-        nombre operativo sin alterar el historial ni los folios.
+        Los códigos se detectan al importar. Configure el nombre y cómo
+        se distribuyen sus cuentas sin alterar folios ni historial.
       </p>
 
       <div className="mt-8 rounded-3xl bg-white p-6 shadow">
@@ -183,12 +203,13 @@ export default function CarteraCampanias() {
 
         {campaigns.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="min-w-[1050px] w-full text-sm">
+            <table className="min-w-[1250px] w-full text-sm">
               <thead className="bg-gray-50 text-left">
                 <tr>
                   <th className="p-4">Origen</th>
                   <th className="p-4">Código</th>
                   <th className="p-4">Nombre operativo</th>
+                  <th className="p-4">Distribución</th>
                   <th className="p-4">Periodo detectado</th>
                   <th className="p-4">Cuentas del corte</th>
                   <th className="p-4">Estado</th>
@@ -214,6 +235,28 @@ export default function CarteraCampanias() {
                           )}
                           className="w-full min-w-64 rounded-lg border p-2"
                         />
+                      </td>
+                      <td className="p-4">
+                        <select
+                          value={draft.modo_distribucion || 'round_robin'}
+                          onChange={event => updateDraft(
+                            item.id,
+                            'modo_distribucion',
+                            event.target.value
+                          )}
+                          className="w-full min-w-52 rounded-lg border bg-white p-2"
+                        >
+                          {DISTRIBUTION_MODES.map(mode => (
+                            <option key={mode.value} value={mode.value}>
+                              {mode.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1 max-w-60 text-xs text-gray-500">
+                          {DISTRIBUTION_MODES.find(mode => (
+                            mode.value === draft.modo_distribucion
+                          ))?.description}
+                        </p>
                       </td>
                       <td className="p-4">
                         {formatDate(item.primera_fecha_cartera)}

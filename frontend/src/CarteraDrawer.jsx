@@ -468,6 +468,7 @@ export default function CarteraDrawer({
   ) || null
   const isAccountActive = account?.activa === true
   const hasActiveAssignment = Boolean(account?.asignacion_id)
+  const isOpenCampaign = account?.modo_distribucion === 'abierta'
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
@@ -484,7 +485,9 @@ export default function CarteraDrawer({
               {account && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                   <span className="rounded-full bg-blue-50 px-3 py-1 font-bold text-blue-800 ring-1 ring-blue-200">
-                    Ejecutivo: {account.ejecutivo_nombre || 'Sin asignar'}
+                    {isOpenCampaign
+                      ? 'Campaña abierta: todos los Ejecutivos'
+                      : `Ejecutivo: ${account.ejecutivo_nombre || 'Sin asignar'}`}
                   </span>
                   <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-700">
                     {CARTERA_ESTADO_LABEL[account.estado_gestion]
@@ -623,13 +626,17 @@ export default function CarteraDrawer({
                             Ejecutivo responsable
                           </p>
                           <p className="mt-2 text-xl font-bold text-blue-900">
-                            {account.ejecutivo_nombre || 'Sin asignar'}
+                            {isOpenCampaign
+                              ? 'Todos los Ejecutivos'
+                              : account.ejecutivo_nombre || 'Sin asignar'}
                           </p>
                         </div>
-                        <span className={`rounded-full px-3 py-1 text-sm font-bold ring-1 ${hasActiveAssignment
+                        <span className={`rounded-full px-3 py-1 text-sm font-bold ring-1 ${hasActiveAssignment || isOpenCampaign
                           ? 'bg-blue-50 text-blue-800 ring-blue-200'
                           : 'bg-gray-100 text-gray-700 ring-gray-200'}`}>
-                          {hasActiveAssignment
+                          {isOpenCampaign
+                            ? 'Acceso compartido'
+                            : hasActiveAssignment
                             ? 'Asignación activa'
                             : 'Sin asignación activa'}
                         </span>
@@ -1253,9 +1260,14 @@ export default function CarteraDrawer({
                       className="rounded-2xl border p-4 sm:p-5"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <p className="font-bold">
-                          {item.tipificacion_nombre || item.evento}
-                        </p>
+                        <div>
+                          <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-bold text-gray-700">
+                            {item.seccion || 'Expediente'}
+                          </span>
+                          <p className="mt-2 font-bold">
+                            {item.tipificacion_nombre || item.evento}
+                          </p>
+                        </div>
                         <time className="text-xs text-gray-500">
                           {formatDateTime(item.creada_at)}
                         </time>

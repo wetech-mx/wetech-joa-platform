@@ -365,6 +365,81 @@ async function upsertCampaign(
   )
 }
 
+async function assignByCampaignMode({
+  client,
+  empresaId,
+  origenId,
+  cuentaId,
+  idCampania,
+  roundRobinFn = assignRoundRobin
+}) {
+  const campaign = await client.query(
+    `
+    SELECT modo_distribucion
+    FROM public.cartera_campanias
+    WHERE
+      empresa_id = $1
+      AND origen_id = $2
+      AND codigo = $3
+      AND activa = TRUE
+    FOR SHARE
+    `,
+    [empresaId, origenId, idCampania]
+  )
+
+  if (!campaign.rows[0]) {
+    throw new CarteraPersistenceError(
+      'BAZ_CAMPAIGN_NOT_FOUND',
+      'La campaña no existe o está inactiva'
+    )
+  }
+
+  const mode = campaign.rows[0].modo_distribucion
+
+  if (mode === 'round_robin') {
+    return roundRobinFn({
+      client,
+      empresaId,
+      origenId,
+      cuentaId,
+      idCampania
+    })
+  }
+
+  if (mode !== 'manual' && mode !== 'abierta') {
+    throw new CarteraPersistenceError(
+      'BAZ_CAMPAIGN_DISTRIBUTION_MODE_INVALID',
+      'La campaña tiene un modo de distribución inválido'
+    )
+  }
+
+  const existing = await client.query(
+    `
+    SELECT id, usuario_id
+    FROM public.cartera_asignaciones
+    WHERE
+      cuenta_id = $1
+      AND activa = TRUE
+    FOR UPDATE
+    `,
+    [cuentaId]
+  )
+
+  if (existing.rows[0]) {
+    return {
+      status: 'kept',
+      assignmentId: existing.rows[0].id,
+      userId: existing.rows[0].usuario_id,
+      mode
+    }
+  }
+
+  return {
+    status: 'unassigned',
+    mode
+  }
+}
+
 async function upsertAccount(
   client,
   {
@@ -796,6 +871,7 @@ async function persistPortfolio({
     let updatedRecords = 0
     let assignedRecords = 0
     let keptAssignments = 0
+    let unassignedRecords = 0
     const campaigns = new Set()
 
     for (const record of portfolio.records) {
@@ -849,18 +925,29 @@ async function persistPortfolio({
         updatedRecords++
       }
 
-      const assignment = await assignFn({
-        client,
-        empresaId,
-        origenId,
-        cuentaId: account.id,
-        idCampania: record.identity.idCampania
-      })
+      const assignment = assignFn === assignRoundRobin
+        ? await assignByCampaignMode({
+            client,
+            empresaId,
+            origenId,
+            cuentaId: account.id,
+            idCampania: record.identity.idCampania,
+            roundRobinFn: assignFn
+          })
+        : await assignFn({
+            client,
+            empresaId,
+            origenId,
+            cuentaId: account.id,
+            idCampania: record.identity.idCampania
+          })
 
       if (assignment.status === 'assigned') {
         assignedRecords++
       } else if (assignment.status === 'kept') {
         keptAssignments++
+      } else if (assignment.status === 'unassigned') {
+        unassignedRecords++
       } else {
         throw new CarteraPersistenceError(
           'BAZ_ASSIGN_RESULT_INVALID',
@@ -902,7 +989,10 @@ async function persistPortfolio({
       newRecords,
       updatedRecords,
       assignedRecords,
-      keptAssignments
+      keptAssignments,
+      ...(unassignedRecords > 0
+        ? { unassignedRecords }
+        : {})
     }
   } catch (error) {
     if (transactionStarted) {
@@ -936,6 +1026,7 @@ async function persistPortfolio({
 }
 
 module.exports = {
+  assignByCampaignMode,
   CarteraPersistenceError,
   SNAPSHOT_FIELDS,
   completeImport,

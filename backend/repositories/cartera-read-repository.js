@@ -423,7 +423,8 @@ function buildListStatement({
     addCondition(
       conditions,
       values,
-      'a.usuario_id = ?',
+      `(a.usuario_id = ?
+        OR cp.modo_distribucion = 'abierta')`,
       scope.userId
     )
   } else if (filters.executiveId) {
@@ -594,6 +595,10 @@ async function listPortfolio({
       o.nombre AS origen_nombre,
       c.id_campania,
       cp.nombre AS campania_nombre,
+      COALESCE(
+        cp.modo_distribucion,
+        'round_robin'
+      ) AS modo_distribucion,
       c.id_cliente,
       c.folio,
       c.estado_gestion,
@@ -724,7 +729,7 @@ function buildManagementListStatement({
     addCondition(
       conditions,
       values,
-      'a.usuario_id = ?',
+      'g.usuario_id = ?',
       scope.userId
     )
   } else if (filters.executiveId) {
@@ -934,7 +939,8 @@ function buildSummaryStatement(
   if (scope.isExecutive) {
     values.push(scope.userId)
     conditions.push(
-      `a.usuario_id = $${values.length}`
+      `(a.usuario_id = $${values.length}
+        OR cp.modo_distribucion = 'abierta')`
     )
   }
 
@@ -957,6 +963,10 @@ function buildSummaryStatement(
         AND a.activa = TRUE
       LEFT JOIN public.usuarios u
         ON u.id = a.usuario_id
+      LEFT JOIN public.cartera_campanias cp
+        ON cp.empresa_id = c.empresa_id
+        AND cp.origen_id = c.origen_id
+        AND cp.codigo = c.id_campania
     `,
     where: `
       WHERE ${conditions.join('\n        AND ')}
@@ -1160,8 +1170,12 @@ async function getPortfolioAccount({
 
   if (scope.isExecutive) {
     values.push(scope.userId)
-    executiveCondition =
-      `AND a.usuario_id = $${values.length}`
+    executiveCondition = `
+      AND (
+        a.usuario_id = $${values.length}
+        OR cp.modo_distribucion = 'abierta'
+      )
+    `
   }
 
   const result = await pool.query(
@@ -1173,6 +1187,10 @@ async function getPortfolioAccount({
       o.nombre AS origen_nombre,
       c.id_campania,
       cp.nombre AS campania_nombre,
+      COALESCE(
+        cp.modo_distribucion,
+        'round_robin'
+      ) AS modo_distribucion,
       c.id_cliente,
       c.folio,
       c.estado_gestion,
@@ -1276,6 +1294,17 @@ async function getPortfolioAccount({
     SELECT
       h.id,
       h.evento,
+      CASE
+        WHEN h.gestion_id IS NOT NULL THEN 'Gestiones'
+        WHEN h.asignacion_id IS NOT NULL THEN 'Asignaciones'
+        WHEN h.pago_validacion_id IS NOT NULL THEN 'Pagos'
+        WHEN h.evento IN ('caso_creado', 'caso_actualizado')
+          THEN 'Casos'
+        WHEN h.evento = 'nota_agregada' THEN 'Notas'
+        WHEN h.evento = 'estado_actualizado' THEN 'Estado'
+        WHEN h.importacion_id IS NOT NULL THEN 'Importación'
+        ELSE 'Expediente'
+      END AS seccion,
       h.detalle,
       h.valor_anterior,
       h.valor_nuevo,

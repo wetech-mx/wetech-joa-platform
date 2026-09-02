@@ -25,6 +25,14 @@ const {
 )
 
 const {
+  CarteraCaseError,
+  createPortfolioCase,
+  getPortfolioCase,
+  listPortfolioCases,
+  updatePortfolioCase
+} = require('../repositories/cartera-case-repository')
+
+const {
   getDailyCutReport,
   listDailyCuts
 } = require('../repositories/cartera-report-repository')
@@ -66,6 +74,7 @@ function respondWithError(
   if (
     error instanceof CarteraReadError
     || error instanceof CarteraManagementError
+    || error instanceof CarteraCaseError
     || error instanceof CarteraUploadError
   ) {
     return res
@@ -317,6 +326,57 @@ async function actualizarCampaniaCartera(
   }
 }
 
+async function obtenerCasosCartera(req, res) {
+  try {
+    return res.json(await listPortfolioCases({
+      pool,
+      usuario: req.usuario,
+      query: req.query
+    }))
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function obtenerCasoCartera(req, res) {
+  try {
+    return res.json(await getPortfolioCase({
+      pool,
+      usuario: req.usuario,
+      caseId: req.params.id
+    }))
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function crearCasoCartera(req, res) {
+  try {
+    const result = await createPortfolioCase({
+      pool,
+      usuario: req.usuario,
+      input: req.body
+    })
+
+    return res.status(201).json(result)
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
+async function actualizarCasoCartera(req, res) {
+  try {
+    return res.json(await updatePortfolioCase({
+      pool,
+      usuario: req.usuario,
+      caseId: req.params.id,
+      input: req.body
+    }))
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
 async function obtenerCortesCartera(
   req,
   res
@@ -543,15 +603,19 @@ async function reasignarCuentaCartera(
 }
 
 module.exports = {
+  actualizarCasoCartera,
   actualizarCampaniaCartera,
   actualizarEstadoCartera,
   actualizarTipificacionCartera,
   agregarNotaCartera,
   confirmarImportacionCartera,
+  crearCasoCartera,
   crearTipificacionCartera,
   descargarReporteCorteCartera,
   obtenerAlertasCartera,
   obtenerCampaniasCartera,
+  obtenerCasoCartera,
+  obtenerCasosCartera,
   obtenerCartera,
   obtenerCortesCartera,
   obtenerCuentaCartera,

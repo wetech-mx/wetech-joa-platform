@@ -1024,13 +1024,25 @@ async function lockAccessibleAccount(
   if (actor.isExecutive) {
     values.push(actor.actorId)
     assignmentCondition = `
-      AND EXISTS (
-        SELECT 1
-        FROM public.cartera_asignaciones ca
-        WHERE
-          ca.cuenta_id = c.id
-          AND ca.usuario_id = $3
-          AND ca.activa = TRUE
+      AND (
+        EXISTS (
+          SELECT 1
+          FROM public.cartera_asignaciones ca
+          WHERE
+            ca.cuenta_id = c.id
+            AND ca.usuario_id = $3
+            AND ca.activa = TRUE
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM public.cartera_campanias cp
+          WHERE
+            cp.empresa_id = c.empresa_id
+            AND cp.origen_id = c.origen_id
+            AND cp.codigo = c.id_campania
+            AND cp.activa = TRUE
+            AND cp.modo_distribucion = 'abierta'
+        )
       )
     `
   }
@@ -1621,13 +1633,15 @@ async function registerPortfolioManagement({
           proximo_seguimiento_at,
           seguimiento_estado,
           notas,
-          evidencia
+          evidencia,
+          creada_at
         )
         VALUES
         (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11, $12, $13, $14,
-          $15, $16, $17, $18, $19, $20
+          $15, $16, $17, $18, $19, $20,
+          clock_timestamp()
         )
         RETURNING
           id,
@@ -1724,7 +1738,8 @@ async function registerPortfolioManagement({
           evento,
           detalle,
           valor_anterior,
-          valor_nuevo
+          valor_nuevo,
+          creada_at
         )
         VALUES
         (
@@ -1734,7 +1749,8 @@ async function registerPortfolioManagement({
           $4,
           $5,
           $6::JSONB,
-          $7::JSONB
+          $7::JSONB,
+          clock_timestamp()
         )
         `,
         [

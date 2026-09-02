@@ -185,14 +185,17 @@ function summarizeCut(details, managementRows) {
       ? 'sin_asignar'
       : String(row.ejecutivo_id)
     const item = byExecutive.get(key)
+      || emptyExecutiveSummary({
+        ejecutivo_id: row.ejecutivo_id,
+        ejecutivo_nombre: row.ejecutivo_nombre
+      })
 
-    if (item) {
-      item.managementsToday = countValue(row.total)
-      item.managedAccounts = Math.min(
-        item.accounts,
-        countValue(row.cuentas_gestionadas)
-      )
-    }
+    item.managementsToday = countValue(row.total)
+    item.managedAccounts = Math.min(
+      item.accounts,
+      countValue(row.cuentas_gestionadas)
+    )
+    byExecutive.set(key, item)
   }
 
   for (const item of byExecutive.values()) {
@@ -290,8 +293,15 @@ async function getDailyCutReport({
       s.telefono_2,
       s.producto,
       c.estado_gestion,
-      a.usuario_id AS ejecutivo_id,
-      COALESCE(u.nombre, 'Sin asignar') AS ejecutivo_nombre
+      CASE
+        WHEN cp.modo_distribucion = 'abierta' THEN 0
+        ELSE a.usuario_id
+      END AS ejecutivo_id,
+      CASE
+        WHEN cp.modo_distribucion = 'abierta'
+          THEN 'Cartera compartida'
+        ELSE COALESCE(u.nombre, 'Sin asignar')
+      END AS ejecutivo_nombre
     FROM public.cartera_importaciones i
     INNER JOIN public.cartera_snapshots s
       ON s.importacion_id = i.id
@@ -332,6 +342,8 @@ async function getDailyCutReport({
     `
     SELECT
       g.usuario_id AS ejecutivo_id,
+      COALESCE(gu.nombre, 'Usuario no disponible')
+        AS ejecutivo_nombre,
       COUNT(*) AS total,
       COUNT(DISTINCT g.cuenta_id) AS cuentas_gestionadas
     FROM public.cartera_gestiones g
@@ -347,11 +359,14 @@ async function getDailyCutReport({
     LEFT JOIN public.cartera_asignaciones a
       ON a.cuenta_id = c.id
       AND a.activa = TRUE
+    LEFT JOIN public.usuarios gu
+      ON gu.id = g.usuario_id
+      AND gu.empresa_id = g.empresa_id
     WHERE ${statement.where}
       AND (
         g.creada_at AT TIME ZONE 'America/Mexico_City'
       )::DATE = $2::DATE
-    GROUP BY g.usuario_id
+    GROUP BY g.usuario_id, gu.nombre
     `,
     statement.values
   )

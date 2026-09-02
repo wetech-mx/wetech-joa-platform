@@ -10,6 +10,16 @@ const {
   resolvePortfolioOrigin
 } = require('./cartera-read-repository')
 
+const CAMPAIGN_DISTRIBUTION_MODES = Object.freeze({
+  ROUND_ROBIN: 'round_robin',
+  MANUAL: 'manual',
+  OPEN: 'abierta'
+})
+
+const ALLOWED_CAMPAIGN_DISTRIBUTION_MODES = new Set(
+  Object.values(CAMPAIGN_DISTRIBUTION_MODES)
+)
+
 function normalizeCampaignName(value) {
   const name = String(value ?? '').trim()
 
@@ -32,6 +42,19 @@ function normalizeCampaignActive(value) {
   }
 
   return value
+}
+
+function normalizeCampaignDistributionMode(value) {
+  const mode = String(value ?? '').trim().toLowerCase()
+
+  if (!ALLOWED_CAMPAIGN_DISTRIBUTION_MODES.has(mode)) {
+    throw new CarteraReadError(
+      'CARTERA_CAMPAIGN_DISTRIBUTION_MODE_INVALID',
+      'El modo debe ser round robin, manual o abierta'
+    )
+  }
+
+  return mode
 }
 
 function requireCampaignAdministrator(usuario) {
@@ -90,6 +113,7 @@ async function listPortfolioCampaigns({
       cp.codigo,
       cp.nombre,
       cp.activa,
+      cp.modo_distribucion,
       cp.primera_fecha_cartera,
       cp.ultima_fecha_cartera,
       COUNT(c.id) FILTER (
@@ -114,6 +138,7 @@ async function listPortfolioCampaigns({
       cp.codigo,
       cp.nombre,
       cp.activa,
+      cp.modo_distribucion,
       cp.primera_fecha_cartera,
       cp.ultima_fecha_cartera,
       cp.actualizada_at
@@ -152,32 +177,93 @@ async function updatePortfolioCampaign({
   const id = normalizeBigintId(campaignId, 'campania')
   const name = normalizeCampaignName(input.nombre)
   const active = normalizeCampaignActive(input.activa)
+  const distributionMode = normalizeCampaignDistributionMode(
+    input.modo_distribucion
+  )
 
   const result = await pool.query(
     `
-    UPDATE public.cartera_campanias
-    SET
-      nombre = $3,
-      activa = $4,
-      actualizada_at = NOW()
-    WHERE
-      id = $1
-      AND empresa_id = $2
-    RETURNING
+    WITH anterior AS MATERIALIZED (
+      SELECT
+        id,
+        nombre,
+        activa,
+        modo_distribucion
+      FROM public.cartera_campanias
+      WHERE
+        id = $1
+        AND empresa_id = $2
+      FOR UPDATE
+    ), actualizada AS (
+      UPDATE public.cartera_campanias cp
+      SET
+        nombre = $3,
+        activa = $4,
+        modo_distribucion = $5,
+        modo_actualizado_por = $6,
+        actualizada_at = NOW()
+      FROM anterior a
+      WHERE cp.id = a.id
+      RETURNING
+        cp.id,
+        cp.origen_id,
+        cp.codigo,
+        cp.nombre,
+        cp.activa,
+        cp.modo_distribucion,
+        cp.primera_fecha_cartera,
+        cp.ultima_fecha_cartera,
+        cp.actualizada_at,
+        a.nombre AS nombre_anterior,
+        a.activa AS activa_anterior,
+        a.modo_distribucion AS modo_anterior
+    ), auditoria AS (
+      INSERT INTO public.cartera_campanias_historial
+      (
+        campania_id,
+        empresa_id,
+        usuario_id,
+        evento,
+        valor_anterior,
+        valor_nuevo
+      )
+      SELECT
+        id,
+        $2,
+        $6,
+        'campania_actualizada',
+        jsonb_build_object(
+          'nombre', nombre_anterior,
+          'activa', activa_anterior,
+          'modo_distribucion', modo_anterior
+        ),
+        jsonb_build_object(
+          'nombre', nombre,
+          'activa', activa,
+          'modo_distribucion', modo_distribucion
+        )
+      FROM actualizada
+      RETURNING id
+    )
+    SELECT
       id,
       origen_id,
       codigo,
       nombre,
       activa,
+      modo_distribucion,
       primera_fecha_cartera,
       ultima_fecha_cartera,
       actualizada_at
+    FROM actualizada
     `,
     [
       id,
       scope.empresaId,
       name,
-      active
+      active,
+      distributionMode,
+      Number(usuario.id)
     ]
   )
 
@@ -193,8 +279,10 @@ async function updatePortfolioCampaign({
 }
 
 module.exports = {
+  CAMPAIGN_DISTRIBUTION_MODES,
   listPortfolioCampaigns,
   normalizeCampaignActive,
+  normalizeCampaignDistributionMode,
   normalizeCampaignName,
   requireCampaignAdministrator,
   updatePortfolioCampaign

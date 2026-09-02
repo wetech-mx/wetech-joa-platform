@@ -3,15 +3,19 @@ const path = require('node:path')
 const multer = require('multer')
 
 const {
+  actualizarCasoCartera,
   actualizarCampaniaCartera,
   actualizarEstadoCartera,
   actualizarTipificacionCartera,
   agregarNotaCartera,
   confirmarImportacionCartera,
+  crearCasoCartera,
   crearTipificacionCartera,
   descargarReporteCorteCartera,
   obtenerAlertasCartera,
   obtenerCampaniasCartera,
+  obtenerCasoCartera,
+  obtenerCasosCartera,
   obtenerCartera,
   obtenerCortesCartera,
   obtenerCuentaCartera,
@@ -117,6 +121,26 @@ router.get(
   '/cartera/campanias',
   requiereAdmin,
   obtenerCampaniasCartera
+)
+
+router.get(
+  '/cartera/casos',
+  obtenerCasosCartera
+)
+
+router.post(
+  '/cartera/casos',
+  crearCasoCartera
+)
+
+router.get(
+  '/cartera/casos/:id',
+  obtenerCasoCartera
+)
+
+router.patch(
+  '/cartera/casos/:id',
+  actualizarCasoCartera
 )
 
 router.patch(
