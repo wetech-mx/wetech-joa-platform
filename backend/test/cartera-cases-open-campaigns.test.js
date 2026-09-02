@@ -283,6 +283,21 @@ test('las gestiones usan la hora real después de obtener el bloqueo', () => {
   )
 })
 
+test('creación y actualización tipan el estado para PostgreSQL', () => {
+  const repository = read(
+    'repositories/cartera-case-repository.js'
+  )
+  const typedStateParameters = repository.match(
+    /\$5::VARCHAR/g
+  ) || []
+
+  assert.equal(typedStateParameters.length, 4)
+  assert.doesNotMatch(
+    repository,
+    /WHEN \$5 = '(?:resuelto|cerrado)'/
+  )
+})
+
 test('la versión concurrente debe ser un entero seguro', () => {
   assert.equal(normalizeVersion('2'), 2)
   assert.throws(
@@ -305,6 +320,19 @@ test('frontend integra campañas abiertas, Casos y fecha automática', () => {
   assert.match(cases, /\/crm-api\/cartera\/casos/)
   assert.match(drawer, /Campaña abierta: todos los Ejecutivos/)
   assert.match(drawer, /item\.seccion/)
+})
+
+test('frontend cierra el formulario solo después de guardar el caso', () => {
+  const cases = read('../frontend/src/CarteraCases.jsx')
+
+  assert.match(
+    cases,
+    /await readJson\([\s\S]*setShowForm\(false\)[\s\S]*await loadCases\(\)/
+  )
+  assert.doesNotMatch(
+    cases,
+    /catch \(requestError\) \{\s*setShowForm\(false\)/
+  )
 })
 
 test('rutas de Casos quedan después de autenticación empresarial', () => {

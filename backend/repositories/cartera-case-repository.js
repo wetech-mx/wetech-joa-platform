@@ -345,8 +345,8 @@ async function createPortfolioCase({
         $7, $8, $9, $9,
         clock_timestamp(),
         clock_timestamp(),
-        CASE WHEN $5 = 'resuelto' THEN clock_timestamp() END,
-        CASE WHEN $5 = 'cerrado' THEN clock_timestamp() END
+        CASE WHEN $5::VARCHAR = 'resuelto' THEN clock_timestamp() END,
+        CASE WHEN $5::VARCHAR = 'cerrado' THEN clock_timestamp() END
       )
       RETURNING *
       `,
@@ -721,12 +721,12 @@ async function updatePortfolioCase({
         actualizado_at = clock_timestamp(),
         version = version + 1,
         resuelto_at = CASE
-          WHEN $5 = 'resuelto'
+          WHEN $5::VARCHAR = 'resuelto'
             THEN COALESCE(resuelto_at, clock_timestamp())
           ELSE NULL
         END,
         cerrado_at = CASE
-          WHEN $5 = 'cerrado'
+          WHEN $5::VARCHAR = 'cerrado'
             THEN COALESCE(cerrado_at, clock_timestamp())
           ELSE NULL
         END
