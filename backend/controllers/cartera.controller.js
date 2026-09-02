@@ -29,6 +29,7 @@ const {
   createPortfolioCase,
   getPortfolioCase,
   listPortfolioCases,
+  reopenPortfolioCase,
   updatePortfolioCase
 } = require('../repositories/cartera-case-repository')
 
@@ -377,6 +378,19 @@ async function actualizarCasoCartera(req, res) {
   }
 }
 
+async function reabrirCasoCartera(req, res) {
+  try {
+    return res.json(await reopenPortfolioCase({
+      pool,
+      usuario: req.usuario,
+      caseId: req.params.id,
+      input: req.body
+    }))
+  } catch (error) {
+    return respondWithError(res, error)
+  }
+}
+
 async function obtenerCortesCartera(
   req,
   res
@@ -628,6 +642,7 @@ module.exports = {
   obtenerTipificacionesCartera,
   obtenerTipificacionesAdministracion,
   previsualizarImportacionCartera,
+  reabrirCasoCartera,
   reasignarCuentaCartera,
   registrarGestionCartera,
   resolverValidacionPagoCartera,

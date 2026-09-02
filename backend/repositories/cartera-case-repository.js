@@ -686,6 +686,14 @@ async function updatePortfolioCase({
       )
     }
 
+    if (current.estado === 'cerrado') {
+      throw new CarteraCaseError(
+        'CARTERA_CASE_CLOSED_READ_ONLY',
+        'El caso está cerrado. Administración debe reabrirlo antes de modificarlo.',
+        409
+      )
+    }
+
     if (Number(current.version) !== expectedVersion) {
       throw new CarteraCaseError(
         'CARTERA_CASE_VERSION_CONFLICT',
@@ -853,6 +861,187 @@ async function updatePortfolioCase({
   })
 }
 
+async function reopenPortfolioCase({
+  pool,
+  usuario,
+  caseId,
+  input = {}
+}) {
+  const actor = resolveCaseActor(usuario)
+
+  if (!actor.isAdministrator) {
+    throw new CarteraCaseError(
+      'CARTERA_CASE_REOPEN_ADMIN_REQUIRED',
+      'Solo Administración puede reabrir un caso cerrado',
+      403
+    )
+  }
+
+  const id = normalizeBigintId(caseId, 'caso')
+  const expectedVersion = normalizeVersion(input.version)
+  const reason = normalizeText(
+    input.motivo,
+    'motivo de reapertura',
+    1000
+  )
+
+  return withTransaction(pool, async client => {
+    const locked = await client.query(
+      `
+      SELECT *
+      FROM public.cartera_casos
+      WHERE
+        id = $1
+        AND empresa_id = $2
+      FOR UPDATE
+      `,
+      [id, actor.empresaId]
+    )
+
+    const current = locked.rows[0]
+
+    if (!current) {
+      throw new CarteraCaseError(
+        'CARTERA_CASE_NOT_FOUND',
+        'El caso no existe dentro del alcance',
+        404
+      )
+    }
+
+    if (current.estado !== 'cerrado') {
+      throw new CarteraCaseError(
+        'CARTERA_CASE_NOT_CLOSED',
+        'Solo puede reabrirse un caso cerrado',
+        409
+      )
+    }
+
+    if (Number(current.version) !== expectedVersion) {
+      throw new CarteraCaseError(
+        'CARTERA_CASE_VERSION_CONFLICT',
+        'Otra persona modificó el caso. Actualícelo antes de reabrir.',
+        409
+      )
+    }
+
+    const reopened = await client.query(
+      `
+      UPDATE public.cartera_casos
+      SET
+        estado = 'en_proceso',
+        actualizado_por = $3,
+        actualizado_at = clock_timestamp(),
+        version = version + 1,
+        resuelto_at = NULL,
+        cerrado_at = NULL
+      WHERE
+        id = $1
+        AND empresa_id = $2
+        AND version = $4
+      RETURNING *
+      `,
+      [
+        id,
+        actor.empresaId,
+        actor.actorId,
+        expectedVersion
+      ]
+    )
+
+    if (!reopened.rows[0]) {
+      throw new CarteraCaseError(
+        'CARTERA_CASE_VERSION_CONFLICT',
+        'Otra persona modificó el caso. Actualícelo antes de reabrir.',
+        409
+      )
+    }
+
+    const record = reopened.rows[0]
+
+    await client.query(
+      `
+      INSERT INTO public.cartera_casos_historial
+      (
+        caso_id,
+        empresa_id,
+        usuario_id,
+        seccion,
+        evento,
+        valor_anterior,
+        valor_nuevo,
+        creada_at
+      )
+      VALUES
+      (
+        $1, $2, $3,
+        'estado',
+        'caso_reabierto',
+        $4::JSONB,
+        $5::JSONB,
+        clock_timestamp()
+      )
+      `,
+      [
+        id,
+        actor.empresaId,
+        actor.actorId,
+        JSON.stringify({
+          estado: current.estado,
+          cerrado_at: current.cerrado_at,
+          version: current.version
+        }),
+        JSON.stringify({
+          estado: record.estado,
+          motivo: reason,
+          version: record.version
+        })
+      ]
+    )
+
+    await client.query(
+      `
+      INSERT INTO public.cartera_historial
+      (
+        cuenta_id,
+        usuario_id,
+        evento,
+        detalle,
+        valor_anterior,
+        valor_nuevo,
+        creada_at
+      )
+      VALUES
+      (
+        $1, $2,
+        'caso_reabierto',
+        $3,
+        $4::JSONB,
+        $5::JSONB,
+        clock_timestamp()
+      )
+      `,
+      [
+        current.cuenta_id,
+        actor.actorId,
+        `Caso #${id} reabierto: ${reason}`,
+        JSON.stringify({
+          caso_id: id,
+          estado: current.estado,
+          version: current.version
+        }),
+        JSON.stringify({
+          caso_id: id,
+          estado: record.estado,
+          motivo: reason,
+          version: record.version
+        })
+      ]
+    )
+
+    return { case: record }
+  })
+}
+
 module.exports = {
   CASE_PRIORITIES,
   CASE_STATES,
@@ -862,6 +1051,7 @@ module.exports = {
   getPortfolioCase,
   listPortfolioCases,
   normalizeVersion,
+  reopenPortfolioCase,
   resolveCaseActor,
   updatePortfolioCase
 }

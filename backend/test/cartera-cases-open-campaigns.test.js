@@ -10,6 +10,7 @@ const {
 const {
   createPortfolioCase,
   normalizeVersion,
+  reopenPortfolioCase,
   updatePortfolioCase
 } = require('../repositories/cartera-case-repository')
 const {
@@ -33,6 +34,14 @@ function executive(id = 12) {
     id,
     empresa_id: 7,
     rol: ROLES.EJECUTIVO
+  }
+}
+
+function administrator(id = 3) {
+  return {
+    id,
+    empresa_id: 7,
+    rol: ROLES.ADMIN
   }
 }
 
@@ -268,6 +277,138 @@ test('dos ediciones del mismo caso se ordenan por bloqueo y versión', async () 
   assert.equal(pool.calls.at(-1).text, 'ROLLBACK')
 })
 
+test('un caso cerrado queda bloqueado en la edición normal', async () => {
+  const pool = transactionPool(async sql => {
+    if (
+      sql.includes('FROM public.cartera_casos')
+      && sql.includes('FOR UPDATE')
+    ) {
+      return {
+        rows: [{
+          id: '501',
+          cuenta_id: '101',
+          titulo: 'Caso cerrado',
+          prioridad: 'media',
+          estado: 'cerrado',
+          asignado_a: 12,
+          comentarios: 'Finalizado',
+          solucion: 'Solución aplicada',
+          version: 3
+        }]
+      }
+    }
+
+    throw new Error(`SQL no esperado: ${sql}`)
+  })
+
+  await assert.rejects(
+    updatePortfolioCase({
+      pool,
+      usuario: executive(),
+      caseId: '501',
+      input: {
+        version: 3,
+        titulo: 'Intento de reapertura',
+        prioridad: 'media',
+        estado: 'en_proceso',
+        comentarios: 'Cambio no autorizado'
+      }
+    }),
+    error => (
+      error.code === 'CARTERA_CASE_CLOSED_READ_ONLY'
+      && error.status === 409
+    )
+  )
+
+  assert.equal(pool.calls.at(-1).text, 'ROLLBACK')
+})
+
+test('Administración reabre con motivo y auditoría separada', async () => {
+  const pool = transactionPool(async (sql, values) => {
+    if (
+      sql.includes('FROM public.cartera_casos')
+      && sql.includes('FOR UPDATE')
+    ) {
+      return {
+        rows: [{
+          id: '501',
+          cuenta_id: '101',
+          estado: 'cerrado',
+          cerrado_at: '2026-09-01T23:39:00.000Z',
+          version: 3
+        }]
+      }
+    }
+
+    if (sql.startsWith('UPDATE public.cartera_casos')) {
+      assert.match(sql, /estado = 'en_proceso'/)
+      assert.match(sql, /cerrado_at = NULL/)
+      assert.deepEqual(values, ['501', 7, 3, 3])
+      return {
+        rows: [{
+          id: '501',
+          cuenta_id: '101',
+          estado: 'en_proceso',
+          version: 4
+        }]
+      }
+    }
+
+    if (sql.includes('cartera_casos_historial')) {
+      assert.match(sql, /'caso_reabierto'/)
+      assert.match(values[4], /Revisión solicitada/)
+      return { rows: [] }
+    }
+
+    if (sql.includes('cartera_historial')) {
+      assert.match(sql, /'caso_reabierto'/)
+      assert.match(values[2], /Revisión solicitada/)
+      return { rows: [] }
+    }
+
+    throw new Error(`SQL no esperado: ${sql}`)
+  })
+
+  const result = await reopenPortfolioCase({
+    pool,
+    usuario: administrator(),
+    caseId: '501',
+    input: {
+      version: 3,
+      motivo: 'Revisión solicitada por el cliente'
+    }
+  })
+
+  assert.equal(result.case.estado, 'en_proceso')
+  assert.equal(result.case.version, 4)
+  assert.equal(pool.calls.at(-1).text, 'COMMIT')
+})
+
+test('solo Administración puede reabrir y el motivo es obligatorio', async () => {
+  await assert.rejects(
+    reopenPortfolioCase({
+      pool: {},
+      usuario: executive(),
+      caseId: '501',
+      input: { version: 3, motivo: 'Intento' }
+    }),
+    error => (
+      error.code === 'CARTERA_CASE_REOPEN_ADMIN_REQUIRED'
+      && error.status === 403
+    )
+  )
+
+  await assert.rejects(
+    reopenPortfolioCase({
+      pool: {},
+      usuario: administrator(),
+      caseId: '501',
+      input: { version: 3, motivo: '   ' }
+    }),
+    error => error.code === 'CARTERA_CASE_TEXT_REQUIRED'
+  )
+})
+
 test('las gestiones usan la hora real después de obtener el bloqueo', () => {
   const management = read(
     'repositories/cartera-management-repository.js'
@@ -335,6 +476,19 @@ test('frontend cierra el formulario solo después de guardar el caso', () => {
   )
 })
 
+test('frontend bloquea cerrados y muestra reapertura solo a Administración', () => {
+  const cases = read('../frontend/src/CarteraCases.jsx')
+
+  assert.match(cases, /Caso cerrado: está disponible únicamente para consulta/)
+  assert.match(cases, /Reapertura administrativa/)
+  assert.match(cases, /Motivo de reapertura/)
+  assert.match(cases, /Reabrir caso/)
+  assert.match(cases, /casos\/\$\{editingId\}\/reabrir/)
+  assert.match(cases, /caseWasClosed && isAdministrator/)
+  assert.match(cases, /disabled=\{caseWasClosed\}/)
+  assert.match(cases, /item\.valor_nuevo\?\.motivo/)
+})
+
 test('rutas de Casos quedan después de autenticación empresarial', () => {
   const routes = read('routes/cartera.routes.js')
   const protectedAt = routes.indexOf('router.use(\n  verificaToken')
@@ -344,4 +498,8 @@ test('rutas de Casos quedan después de autenticación empresarial', () => {
   assert.ok(casesAt > protectedAt)
   assert.match(routes, /router\.post\([\s\S]*'\/cartera\/casos'/)
   assert.match(routes, /router\.patch\([\s\S]*'\/cartera\/casos\/:id'/)
+  assert.match(
+    routes,
+    /'\/cartera\/casos\/:id\/reabrir',[\s\S]*requiereAdmin/
+  )
 })

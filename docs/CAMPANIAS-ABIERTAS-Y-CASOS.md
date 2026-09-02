@@ -45,6 +45,12 @@ Las fechas se generan en el servidor; el usuario no tiene que cambiarlas diariam
 
 Cada actualización bloquea el Caso y compara su versión. Si otra persona lo modificó primero, el segundo guardado recibe un conflicto y debe actualizar la información. Esto evita que una edición silenciosamente borre la otra.
 
+### Cierre y reapertura
+
+Un Ejecutivo puede llevar el Caso hasta `Cerrado`, siempre con una solución. Una vez cerrado, todos sus campos quedan disponibles únicamente para consulta y la edición normal se bloquea tanto en la interfaz como en el servidor.
+
+Solo Administración puede reabrirlo mediante la acción separada `Reabrir caso`. La acción exige un motivo, devuelve el Caso a `En proceso`, conserva la solución anterior como referencia y registra administrador, fecha, motivo, estado anterior y estado nuevo.
+
 ## Auditoría
 
 La auditoría de la cuenta identifica la sección del movimiento:

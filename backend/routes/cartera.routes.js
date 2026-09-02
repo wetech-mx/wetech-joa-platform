@@ -28,6 +28,7 @@ const {
   obtenerTipificacionesCartera,
   obtenerTipificacionesAdministracion,
   previsualizarImportacionCartera,
+  reabrirCasoCartera,
   reasignarCuentaCartera,
   registrarGestionCartera,
   resolverValidacionPagoCartera
@@ -141,6 +142,12 @@ router.get(
 router.patch(
   '/cartera/casos/:id',
   actualizarCasoCartera
+)
+
+router.post(
+  '/cartera/casos/:id/reabrir',
+  requiereAdmin,
+  reabrirCasoCartera
 )
 
 router.patch(

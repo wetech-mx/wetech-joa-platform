@@ -67,6 +67,8 @@ export default function CarteraCases({ usuario }) {
   const [saving, setSaving] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
+  const [caseWasClosed, setCaseWasClosed] = useState(false)
+  const [reopenReason, setReopenReason] = useState('')
   const [form, setForm] = useState(EMPTY_FORM)
   const [history, setHistory] = useState([])
   const [accountSearch, setAccountSearch] = useState('')
@@ -123,6 +125,8 @@ export default function CarteraCases({ usuario }) {
 
   function startCreate() {
     setEditingId(null)
+    setCaseWasClosed(false)
+    setReopenReason('')
     setHistory([])
     setForm({
       ...EMPTY_FORM,
@@ -182,6 +186,8 @@ export default function CarteraCases({ usuario }) {
       const record = data.case
 
       setEditingId(String(record.id))
+      setCaseWasClosed(record.estado === 'cerrado')
+      setReopenReason('')
       setForm({
         cuenta_id: String(record.cuenta_id),
         titulo: record.titulo || '',
@@ -240,6 +246,46 @@ export default function CarteraCases({ usuario }) {
           ? 'Caso actualizado correctamente.'
           : 'Caso creado correctamente.'
       )
+      setShowForm(false)
+      await loadCases()
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function reopenCase() {
+    const reason = reopenReason.trim()
+
+    if (!reason) {
+      setError('Escriba el motivo de la reapertura.')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    setMessage('')
+
+    try {
+      const response = await apiFetch(
+        `/crm-api/cartera/casos/${editingId}/reabrir`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            motivo: reason,
+            version: form.version
+          })
+        }
+      )
+
+      await readJson(
+        response,
+        'No fue posible reabrir el caso'
+      )
+
+      setMessage('Caso reabierto correctamente en estado En proceso.')
       setShowForm(false)
       await loadCases()
     } catch (requestError) {
@@ -417,12 +463,22 @@ export default function CarteraCases({ usuario }) {
               </div>
             )}
 
+            {caseWasClosed && (
+              <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                Caso cerrado: está disponible únicamente para consulta.
+                {isAdministrator
+                  ? ' Para modificarlo, utilice la reapertura administrativa.'
+                  : ' Solicite a Administración que lo reabra.'}
+              </p>
+            )}
+
             <form onSubmit={saveCase} className="mt-6 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="text-sm font-bold sm:col-span-2">
                   Título
                   <input
                     required
+                    disabled={caseWasClosed}
                     maxLength={200}
                     value={form.titulo}
                     onChange={event => updateForm('titulo', event.target.value)}
@@ -432,6 +488,7 @@ export default function CarteraCases({ usuario }) {
                 <label className="text-sm font-bold">
                   Prioridad
                   <select
+                    disabled={caseWasClosed}
                     value={form.prioridad}
                     onChange={event => updateForm('prioridad', event.target.value)}
                     className="mt-1 w-full rounded-xl border bg-white p-3 font-normal"
@@ -444,6 +501,7 @@ export default function CarteraCases({ usuario }) {
                 <label className="text-sm font-bold">
                   Estado
                   <select
+                    disabled={caseWasClosed}
                     value={form.estado}
                     onChange={event => updateForm('estado', event.target.value)}
                     className="mt-1 w-full rounded-xl border bg-white p-3 font-normal"
@@ -458,6 +516,7 @@ export default function CarteraCases({ usuario }) {
                     Responsable
                     <select
                       required
+                      disabled={caseWasClosed}
                       value={form.asignado_a}
                       onChange={event => updateForm('asignado_a', event.target.value)}
                       className="mt-1 w-full rounded-xl border bg-white p-3 font-normal"
@@ -474,6 +533,7 @@ export default function CarteraCases({ usuario }) {
                 Comentarios
                 <textarea
                   required
+                  disabled={caseWasClosed}
                   maxLength={5000}
                   rows={4}
                   value={form.comentarios}
@@ -485,6 +545,7 @@ export default function CarteraCases({ usuario }) {
                 Solución
                 <textarea
                   required={form.estado === 'resuelto' || form.estado === 'cerrado'}
+                  disabled={caseWasClosed}
                   maxLength={5000}
                   rows={3}
                   value={form.solucion}
@@ -493,14 +554,46 @@ export default function CarteraCases({ usuario }) {
                   className="mt-1 w-full rounded-xl border p-3 font-normal"
                 />
               </label>
-              <button
-                type="submit"
-                disabled={saving || (!editingId && !form.cuenta_id)}
-                className="rounded-xl bg-orange-600 px-5 py-3 text-white disabled:bg-gray-300"
-              >
-                {saving ? 'Guardando…' : 'Guardar caso'}
-              </button>
+              {!caseWasClosed && (
+                <button
+                  type="submit"
+                  disabled={saving || (!editingId && !form.cuenta_id)}
+                  className="rounded-xl bg-orange-600 px-5 py-3 text-white disabled:bg-gray-300"
+                >
+                  {saving ? 'Guardando…' : 'Guardar caso'}
+                </button>
+              )}
             </form>
+
+            {caseWasClosed && isAdministrator && (
+              <section className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                <h3 className="font-bold text-orange-900">
+                  Reapertura administrativa
+                </h3>
+                <p className="mt-1 text-sm text-orange-800">
+                  El caso regresará a En proceso y la acción quedará auditada.
+                </p>
+                <label className="mt-4 block text-sm font-bold">
+                  Motivo de reapertura
+                  <textarea
+                    required
+                    maxLength={1000}
+                    rows={3}
+                    value={reopenReason}
+                    onChange={event => setReopenReason(event.target.value)}
+                    className="mt-1 w-full rounded-xl border bg-white p-3 font-normal"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={saving || !reopenReason.trim()}
+                  onClick={reopenCase}
+                  className="mt-3 rounded-xl bg-orange-600 px-5 py-3 text-white disabled:bg-gray-300"
+                >
+                  {saving ? 'Reabriendo…' : 'Reabrir caso'}
+                </button>
+              </section>
+            )}
 
             {editingId && history.length > 0 && (
               <section className="mt-8 border-t pt-6">
@@ -514,6 +607,11 @@ export default function CarteraCases({ usuario }) {
                       <p className="text-gray-500">
                         {formatDateTime(item.creada_at)} · Sección {item.seccion}
                       </p>
+                      {item.valor_nuevo?.motivo && (
+                        <p className="mt-1 text-gray-700">
+                          Motivo: {item.valor_nuevo.motivo}
+                        </p>
+                      )}
                     </article>
                   ))}
                 </div>
