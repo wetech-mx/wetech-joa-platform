@@ -69,6 +69,9 @@ export default function CarteraCases({ usuario }) {
   const [editingId, setEditingId] = useState(null)
   const [caseWasClosed, setCaseWasClosed] = useState(false)
   const [reopenReason, setReopenReason] = useState('')
+  const [selectedCaseIds, setSelectedCaseIds] = useState([])
+  const [showBulkReopen, setShowBulkReopen] = useState(false)
+  const [bulkReopenReason, setBulkReopenReason] = useState('')
   const [form, setForm] = useState(EMPTY_FORM)
   const [history, setHistory] = useState([])
   const [accountSearch, setAccountSearch] = useState('')
@@ -76,6 +79,16 @@ export default function CarteraCases({ usuario }) {
   const [searchingAccounts, setSearchingAccounts] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const bulkSelectionEnabled = (
+    isAdministrator && statusFilter === 'cerrado'
+  )
+  const selectableClosedCases = bulkSelectionEnabled
+    ? cases.filter(item => item.estado === 'cerrado')
+    : []
+  const allVisibleClosedSelected = (
+    selectableClosedCases.length > 0
+    && selectedCaseIds.length === selectableClosedCases.length
+  )
 
   const loadCases = useCallback(async () => {
     setLoading(true)
@@ -92,6 +105,7 @@ export default function CarteraCases({ usuario }) {
       )
 
       setCases(Array.isArray(data) ? data : [])
+      setSelectedCaseIds([])
     } catch (requestError) {
       setCases([])
       setError(requestError.message)
@@ -121,6 +135,40 @@ export default function CarteraCases({ usuario }) {
 
   function updateForm(field, value) {
     setForm(current => ({ ...current, [field]: value }))
+  }
+
+  function changeStatusFilter(value) {
+    setStatusFilter(value)
+    setSelectedCaseIds([])
+    setShowBulkReopen(false)
+    setBulkReopenReason('')
+  }
+
+  function toggleCaseSelection(id) {
+    const normalizedId = String(id)
+
+    setSelectedCaseIds(current => (
+      current.includes(normalizedId)
+        ? current.filter(item => item !== normalizedId)
+        : [...current, normalizedId]
+    ))
+  }
+
+  function toggleAllVisibleClosed() {
+    setSelectedCaseIds(
+      allVisibleClosedSelected
+        ? []
+        : selectableClosedCases.map(item => String(item.id))
+    )
+  }
+
+  function openBulkReopen() {
+    if (selectedCaseIds.length === 0) return
+
+    setBulkReopenReason('')
+    setShowBulkReopen(true)
+    setError('')
+    setMessage('')
   }
 
   function startCreate() {
@@ -295,6 +343,74 @@ export default function CarteraCases({ usuario }) {
     }
   }
 
+  async function reopenSelectedCases() {
+    const reason = bulkReopenReason.trim()
+    const selectedCases = selectableClosedCases
+      .filter(item => selectedCaseIds.includes(String(item.id)))
+      .map(item => ({
+        id: String(item.id),
+        version: item.version
+      }))
+
+    if (!reason) {
+      setError('Escriba el motivo de la reapertura masiva.')
+      return
+    }
+
+    if (selectedCases.length === 0) {
+      setShowBulkReopen(false)
+      setError('Los casos seleccionados ya no están disponibles para reabrir.')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    setMessage('')
+
+    try {
+      const response = await apiFetch(
+        '/crm-api/cartera/casos/reabrir-masivo',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            casos: selectedCases,
+            motivo: reason
+          })
+        }
+      )
+      const data = await readJson(
+        response,
+        'No fue posible completar la reapertura masiva'
+      )
+      const reopenedCount = Array.isArray(data.reopened)
+        ? data.reopened.length
+        : 0
+      const conflicts = Array.isArray(data.conflicts)
+        ? data.conflicts
+        : []
+      const successMessage = reopenedCount > 0
+        ? `${reopenedCount} caso${reopenedCount === 1 ? '' : 's'} `
+          + `reabierto${reopenedCount === 1 ? '' : 's'} correctamente.`
+        : ''
+      const conflictMessage = conflicts.length > 0
+        ? `${conflicts.length} caso${conflicts.length === 1 ? '' : 's'} `
+          + 'se omitieron porque cambiaron o ya no estaban cerrados.'
+        : ''
+
+      setShowBulkReopen(false)
+      setBulkReopenReason('')
+      setSelectedCaseIds([])
+      await loadCases()
+      setMessage(successMessage)
+      setError(conflictMessage)
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <section className="min-w-0 space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -330,7 +446,7 @@ export default function CarteraCases({ usuario }) {
           Estado
           <select
             value={statusFilter}
-            onChange={event => setStatusFilter(event.target.value)}
+            onChange={event => changeStatusFilter(event.target.value)}
             className="mt-2 w-full rounded-xl border bg-white p-3"
           >
             <option value="">Todos</option>
@@ -339,6 +455,29 @@ export default function CarteraCases({ usuario }) {
             ))}
           </select>
         </label>
+
+        {bulkSelectionEnabled && cases.length > 0 && (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
+            <div>
+              <p className="font-bold">
+                {selectedCaseIds.length} caso
+                {selectedCaseIds.length === 1 ? '' : 's'} seleccionado
+                {selectedCaseIds.length === 1 ? '' : 's'}
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                Puede reabrir hasta 100 casos cerrados visibles por operación.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={selectedCaseIds.length === 0 || saving}
+              onClick={openBulkReopen}
+              className="rounded-xl bg-orange-600 px-5 py-3 text-white disabled:bg-gray-300"
+            >
+              Reabrir seleccionados ({selectedCaseIds.length})
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
@@ -351,6 +490,19 @@ export default function CarteraCases({ usuario }) {
             <table className="min-w-[1100px] w-full text-left text-sm">
               <thead className="border-b bg-gray-50">
                 <tr>
+                  {bulkSelectionEnabled && (
+                    <th className="w-28 p-4">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={allVisibleClosedSelected}
+                          onChange={toggleAllVisibleClosed}
+                          className="h-4 w-4"
+                        />
+                        Todos
+                      </label>
+                    </th>
+                  )}
                   <th className="p-4">Caso</th>
                   <th className="p-4">Cuenta</th>
                   <th className="p-4">Prioridad</th>
@@ -363,6 +515,17 @@ export default function CarteraCases({ usuario }) {
               <tbody className="divide-y">
                 {cases.map(item => (
                   <tr key={item.id}>
+                    {bulkSelectionEnabled && (
+                      <td className="p-4">
+                        <input
+                          type="checkbox"
+                          aria-label={`Seleccionar caso #${item.id}`}
+                          checked={selectedCaseIds.includes(String(item.id))}
+                          onChange={() => toggleCaseSelection(item.id)}
+                          className="h-4 w-4"
+                        />
+                      </td>
+                    )}
                     <td className="p-4">
                       <p className="font-bold">#{item.id} · {item.titulo}</p>
                       <p className="mt-1 max-w-72 truncate text-xs text-gray-500">
@@ -395,6 +558,52 @@ export default function CarteraCases({ usuario }) {
           </div>
         )}
       </div>
+
+      {showBulkReopen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <section className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
+            <h2 className="text-2xl font-bold">Reapertura masiva administrativa</h2>
+            <p className="mt-3 text-gray-600">
+              Está por reabrir {selectedCaseIds.length} caso
+              {selectedCaseIds.length === 1 ? '' : 's'}.
+              Todos regresarán al estado En proceso y conservarán su información.
+            </p>
+            <label className="mt-5 block text-sm font-bold">
+              Motivo de reapertura
+              <textarea
+                required
+                autoFocus
+                maxLength={1000}
+                rows={4}
+                value={bulkReopenReason}
+                onChange={event => setBulkReopenReason(event.target.value)}
+                className="mt-2 w-full rounded-xl border p-3 font-normal"
+              />
+            </label>
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setShowBulkReopen(false)
+                  setBulkReopenReason('')
+                }}
+                className="rounded-xl border px-5 py-3 disabled:text-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={saving || !bulkReopenReason.trim()}
+                onClick={reopenSelectedCases}
+                className="rounded-xl bg-orange-600 px-5 py-3 text-white disabled:bg-gray-300"
+              >
+                {saving ? 'Reabriendo…' : 'Confirmar reapertura'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">

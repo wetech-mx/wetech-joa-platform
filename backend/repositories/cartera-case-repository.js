@@ -1,5 +1,7 @@
 'use strict'
 
+const { randomUUID } = require('node:crypto')
+
 const { ROLES } = require('../config/constants')
 const {
   normalizeBigintId,
@@ -20,6 +22,8 @@ const CASE_STATES = new Set([
   'resuelto',
   'cerrado'
 ])
+
+const MAX_BULK_REOPEN_CASES = 100
 
 class CarteraCaseError extends Error {
   constructor(code, message, status = 400) {
@@ -109,6 +113,42 @@ function normalizeVersion(value) {
   }
 
   return version
+}
+
+function normalizeBulkReopenCases(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new CarteraCaseError(
+      'CARTERA_CASE_BULK_SELECTION_REQUIRED',
+      'Seleccione al menos un caso cerrado'
+    )
+  }
+
+  if (value.length > MAX_BULK_REOPEN_CASES) {
+    throw new CarteraCaseError(
+      'CARTERA_CASE_BULK_LIMIT_EXCEEDED',
+      `Solo pueden reabrirse ${MAX_BULK_REOPEN_CASES} casos por operación`
+    )
+  }
+
+  const seen = new Set()
+
+  return value.map(item => {
+    const id = String(normalizeBigintId(item?.id, 'caso'))
+
+    if (seen.has(id)) {
+      throw new CarteraCaseError(
+        'CARTERA_CASE_BULK_DUPLICATE',
+        `El caso #${id} está repetido en la selección`
+      )
+    }
+
+    seen.add(id)
+
+    return {
+      id,
+      version: normalizeVersion(item?.version)
+    }
+  })
 }
 
 function resolveCaseActor(usuario) {
@@ -1042,16 +1082,225 @@ async function reopenPortfolioCase({
   })
 }
 
+async function reopenPortfolioCasesBulk({
+  pool,
+  usuario,
+  input = {}
+}) {
+  const actor = resolveCaseActor(usuario)
+
+  if (!actor.isAdministrator) {
+    throw new CarteraCaseError(
+      'CARTERA_CASE_REOPEN_ADMIN_REQUIRED',
+      'Solo Administración puede reabrir casos cerrados',
+      403
+    )
+  }
+
+  const selection = normalizeBulkReopenCases(input.casos)
+  const reason = normalizeText(
+    input.motivo,
+    'motivo de reapertura',
+    1000
+  )
+  const batchId = randomUUID()
+
+  return withTransaction(pool, async client => {
+    const locked = await client.query(
+      `
+      SELECT *
+      FROM public.cartera_casos
+      WHERE
+        empresa_id = $1
+        AND id = ANY($2::BIGINT[])
+      ORDER BY id
+      FOR UPDATE
+      `,
+      [actor.empresaId, selection.map(item => item.id)]
+    )
+
+    const currentById = new Map(
+      locked.rows.map(row => [String(row.id), row])
+    )
+    const reopened = []
+    const conflicts = []
+
+    for (const requested of selection) {
+      const current = currentById.get(requested.id)
+
+      if (!current) {
+        conflicts.push({
+          id: requested.id,
+          code: 'CARTERA_CASE_NOT_FOUND',
+          message: 'El caso no existe dentro de la empresa'
+        })
+        continue
+      }
+
+      if (current.estado !== 'cerrado') {
+        conflicts.push({
+          id: requested.id,
+          code: 'CARTERA_CASE_NOT_CLOSED',
+          message: 'El caso ya no está cerrado'
+        })
+        continue
+      }
+
+      if (Number(current.version) !== requested.version) {
+        conflicts.push({
+          id: requested.id,
+          code: 'CARTERA_CASE_VERSION_CONFLICT',
+          message: 'El caso fue modificado después de seleccionarlo'
+        })
+        continue
+      }
+
+      const updated = await client.query(
+        `
+        UPDATE public.cartera_casos
+        SET
+          estado = 'en_proceso',
+          actualizado_por = $3,
+          actualizado_at = clock_timestamp(),
+          version = version + 1,
+          resuelto_at = NULL,
+          cerrado_at = NULL
+        WHERE
+          id = $1
+          AND empresa_id = $2
+          AND version = $4
+          AND estado = 'cerrado'
+        RETURNING *
+        `,
+        [
+          requested.id,
+          actor.empresaId,
+          actor.actorId,
+          requested.version
+        ]
+      )
+
+      const record = updated.rows[0]
+
+      if (!record) {
+        conflicts.push({
+          id: requested.id,
+          code: 'CARTERA_CASE_VERSION_CONFLICT',
+          message: 'El caso cambió durante la reapertura'
+        })
+        continue
+      }
+
+      await client.query(
+        `
+        INSERT INTO public.cartera_casos_historial
+        (
+          caso_id,
+          empresa_id,
+          usuario_id,
+          seccion,
+          evento,
+          valor_anterior,
+          valor_nuevo,
+          creada_at
+        )
+        VALUES
+        (
+          $1, $2, $3,
+          'estado',
+          'caso_reabierto_masivo',
+          $4::JSONB,
+          $5::JSONB,
+          clock_timestamp()
+        )
+        `,
+        [
+          requested.id,
+          actor.empresaId,
+          actor.actorId,
+          JSON.stringify({
+            estado: current.estado,
+            cerrado_at: current.cerrado_at,
+            version: current.version
+          }),
+          JSON.stringify({
+            estado: record.estado,
+            motivo: reason,
+            operacion_id: batchId,
+            version: record.version
+          })
+        ]
+      )
+
+      await client.query(
+        `
+        INSERT INTO public.cartera_historial
+        (
+          cuenta_id,
+          usuario_id,
+          evento,
+          detalle,
+          valor_anterior,
+          valor_nuevo,
+          creada_at
+        )
+        VALUES
+        (
+          $1, $2,
+          'caso_reabierto_masivo',
+          $3,
+          $4::JSONB,
+          $5::JSONB,
+          clock_timestamp()
+        )
+        `,
+        [
+          current.cuenta_id,
+          actor.actorId,
+          `Caso #${requested.id} reabierto en operación ${batchId}: ${reason}`,
+          JSON.stringify({
+            caso_id: requested.id,
+            estado: current.estado,
+            version: current.version
+          }),
+          JSON.stringify({
+            caso_id: requested.id,
+            estado: record.estado,
+            motivo: reason,
+            operacion_id: batchId,
+            version: record.version
+          })
+        ]
+      )
+
+      reopened.push({
+        id: String(record.id),
+        version: Number(record.version)
+      })
+    }
+
+    return {
+      batchId,
+      requested: selection.length,
+      reopened,
+      conflicts
+    }
+  })
+}
+
 module.exports = {
   CASE_PRIORITIES,
   CASE_STATES,
+  MAX_BULK_REOPEN_CASES,
   CarteraCaseError,
   casePayload,
   createPortfolioCase,
   getPortfolioCase,
   listPortfolioCases,
+  normalizeBulkReopenCases,
   normalizeVersion,
   reopenPortfolioCase,
+  reopenPortfolioCasesBulk,
   resolveCaseActor,
   updatePortfolioCase
 }

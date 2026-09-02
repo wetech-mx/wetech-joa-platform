@@ -9,8 +9,10 @@ const {
 } = require('../importers/cartera-repository')
 const {
   createPortfolioCase,
+  normalizeBulkReopenCases,
   normalizeVersion,
   reopenPortfolioCase,
+  reopenPortfolioCasesBulk,
   updatePortfolioCase
 } = require('../repositories/cartera-case-repository')
 const {
@@ -409,6 +411,132 @@ test('solo Administración puede reabrir y el motivo es obligatorio', async () =
   )
 })
 
+test('Administración reabre una selección y reporta conflictos sin perder el lote', async () => {
+  const pool = transactionPool(async (sql, values) => {
+    if (
+      sql.includes('FROM public.cartera_casos')
+      && sql.includes('ANY($2::BIGINT[])')
+    ) {
+      assert.equal(values[0], 7)
+      assert.deepEqual(values[1], ['501', '502', '503', '504'])
+      return {
+        rows: [
+          {
+            id: '501',
+            cuenta_id: '101',
+            estado: 'cerrado',
+            cerrado_at: '2026-09-02T01:00:00.000Z',
+            version: 3
+          },
+          {
+            id: '502',
+            cuenta_id: '102',
+            estado: 'cerrado',
+            cerrado_at: '2026-09-02T01:01:00.000Z',
+            version: 4
+          },
+          {
+            id: '503',
+            cuenta_id: '103',
+            estado: 'en_proceso',
+            version: 2
+          }
+        ]
+      }
+    }
+
+    if (sql.startsWith('UPDATE public.cartera_casos')) {
+      assert.deepEqual(values, ['501', 7, 3, 3])
+      assert.match(sql, /AND estado = 'cerrado'/)
+      return {
+        rows: [{
+          id: '501',
+          cuenta_id: '101',
+          estado: 'en_proceso',
+          version: 4
+        }]
+      }
+    }
+
+    if (sql.includes('cartera_casos_historial')) {
+      assert.match(sql, /'caso_reabierto_masivo'/)
+      assert.match(values[4], /Reapertura de campaña/)
+      assert.match(values[4], /operacion_id/)
+      return { rows: [] }
+    }
+
+    if (sql.includes('cartera_historial')) {
+      assert.match(sql, /'caso_reabierto_masivo'/)
+      assert.match(values[2], /Reapertura de campaña/)
+      return { rows: [] }
+    }
+
+    throw new Error(`SQL no esperado: ${sql}`)
+  })
+
+  const result = await reopenPortfolioCasesBulk({
+    pool,
+    usuario: administrator(),
+    input: {
+      motivo: 'Reapertura de campaña por cierre incorrecto',
+      casos: [
+        { id: '501', version: 3 },
+        { id: '502', version: 3 },
+        { id: '503', version: 2 },
+        { id: '504', version: 1 }
+      ]
+    }
+  })
+
+  assert.match(result.batchId, /^[0-9a-f-]{36}$/)
+  assert.equal(result.requested, 4)
+  assert.deepEqual(result.reopened, [{ id: '501', version: 4 }])
+  assert.deepEqual(
+    result.conflicts.map(item => item.code),
+    [
+      'CARTERA_CASE_VERSION_CONFLICT',
+      'CARTERA_CASE_NOT_CLOSED',
+      'CARTERA_CASE_NOT_FOUND'
+    ]
+  )
+  assert.equal(pool.calls.at(-1).text, 'COMMIT')
+})
+
+test('reapertura masiva exige Administración, selección única y máximo 100', async () => {
+  await assert.rejects(
+    reopenPortfolioCasesBulk({
+      pool: {},
+      usuario: executive(),
+      input: {
+        motivo: 'Intento',
+        casos: [{ id: '501', version: 3 }]
+      }
+    }),
+    error => error.code === 'CARTERA_CASE_REOPEN_ADMIN_REQUIRED'
+  )
+
+  assert.throws(
+    () => normalizeBulkReopenCases([]),
+    error => error.code === 'CARTERA_CASE_BULK_SELECTION_REQUIRED'
+  )
+  assert.throws(
+    () => normalizeBulkReopenCases([
+      { id: '501', version: 3 },
+      { id: '501', version: 3 }
+    ]),
+    error => error.code === 'CARTERA_CASE_BULK_DUPLICATE'
+  )
+  assert.throws(
+    () => normalizeBulkReopenCases(
+      Array.from({ length: 101 }, (_, index) => ({
+        id: String(index + 1),
+        version: 1
+      }))
+    ),
+    error => error.code === 'CARTERA_CASE_BULK_LIMIT_EXCEEDED'
+  )
+})
+
 test('las gestiones usan la hora real después de obtener el bloqueo', () => {
   const management = read(
     'repositories/cartera-management-repository.js'
@@ -489,6 +617,20 @@ test('frontend bloquea cerrados y muestra reapertura solo a Administración', ()
   assert.match(cases, /item\.valor_nuevo\?\.motivo/)
 })
 
+test('frontend selecciona cerrados visibles y confirma reapertura masiva', () => {
+  const cases = read('../frontend/src/CarteraCases.jsx')
+
+  assert.match(cases, /statusFilter === 'cerrado'/)
+  assert.match(cases, /selectedCaseIds/)
+  assert.match(cases, /toggleAllVisibleClosed/)
+  assert.match(cases, /Reabrir seleccionados/)
+  assert.match(cases, /Reapertura masiva administrativa/)
+  assert.match(cases, /Confirmar reapertura/)
+  assert.match(cases, /casos\/reabrir-masivo/)
+  assert.match(cases, /casos: selectedCases/)
+  assert.match(cases, /se omitieron porque cambiaron/)
+})
+
 test('rutas de Casos quedan después de autenticación empresarial', () => {
   const routes = read('routes/cartera.routes.js')
   const protectedAt = routes.indexOf('router.use(\n  verificaToken')
@@ -501,5 +643,9 @@ test('rutas de Casos quedan después de autenticación empresarial', () => {
   assert.match(
     routes,
     /'\/cartera\/casos\/:id\/reabrir',[\s\S]*requiereAdmin/
+  )
+  assert.match(
+    routes,
+    /'\/cartera\/casos\/reabrir-masivo',[\s\S]*requiereAdmin/
   )
 })

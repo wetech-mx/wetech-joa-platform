@@ -29,6 +29,7 @@ const {
   obtenerTipificacionesAdministracion,
   previsualizarImportacionCartera,
   reabrirCasoCartera,
+  reabrirCasosCarteraMasivo,
   reasignarCuentaCartera,
   registrarGestionCartera,
   resolverValidacionPagoCartera
@@ -132,6 +133,12 @@ router.get(
 router.post(
   '/cartera/casos',
   crearCasoCartera
+)
+
+router.post(
+  '/cartera/casos/reabrir-masivo',
+  requiereAdmin,
+  reabrirCasosCarteraMasivo
 )
 
 router.get(

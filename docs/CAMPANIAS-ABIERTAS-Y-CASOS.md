@@ -51,6 +51,8 @@ Un Ejecutivo puede llevar el Caso hasta `Cerrado`, siempre con una solución. Un
 
 Solo Administración puede reabrirlo mediante la acción separada `Reabrir caso`. La acción exige un motivo, devuelve el Caso a `En proceso`, conserva la solución anterior como referencia y registra administrador, fecha, motivo, estado anterior y estado nuevo.
 
+Administración también puede filtrar los Casos cerrados, seleccionarlos individualmente o marcar los visibles y reabrir hasta 100 en una sola operación. La confirmación exige un motivo común. Cada Caso conserva su propio historial con el identificador de la operación masiva; los Casos que cambiaron de estado o versión después de seleccionarse se omiten y se informan sin cancelar la reapertura de los demás.
+
 ## Auditoría
 
 La auditoría de la cuenta identifica la sección del movimiento:
